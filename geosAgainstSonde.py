@@ -383,7 +383,6 @@ def writeH5( a, ss, press_int ):
     Output: 
             hdf5 file: {experiment}_{control}_output_stats.h5 output to wherever the script is running. (cwd)
     """
-    print(ss)
     with h5py.File(a.experiment +'_'+ a.control +'_output_stats.h5','w') as f:
         for k in list(ss.keys()):
             dset = f.create_dataset(k,data=ss[k])
