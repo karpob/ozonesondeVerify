@@ -14,6 +14,13 @@ def go ( a ):
     Output:
             a plot tagged with experiment and control, along with and hdf5 with stats plotted. 
     """
+
+    startLon = convertLongitude360(a.start_lon)
+    endLon = convertLongitude360(a.end_lon)
+
+    startLat = float(a.start_lat)
+    endLat = float(a.end_lat)
+
     press_edges, press_int, nint = getPressureGridForOutput()
     
     sondeFiles = glob.glob(os.path.join(a.sonde_path,'*.csv'))
@@ -32,8 +39,9 @@ def go ( a ):
     fcnt = 0
     for s in sondeFiles:
         lonSonde, latSonde, dateSonde, timeSonde, ozSonde_mPa, pressSonde_hPa, tempSonde_C = readProfile(s,sondeType)
-        if(dateSonde >= a.start and dateSonde <= a.end and ozSonde_mPa.shape[0]>20 and 'ascen' in s):
-        #if(dateSonde >= a.start and dateSonde <= a.end):
+        if(dateSonde >= a.start and dateSonde <= a.end and\
+           convertLongitude360(lonSonde) >= startLon and convertLongitude360(lonSonde) <= endLon and\
+           float(latSonde) >= startLat and float(latSonde) <= endLat):
             fcnt+=1
             print('file count',fcnt)
             print("Sonde read in: {}".format(s) ) 
@@ -41,20 +49,19 @@ def go ( a ):
             # Do stuff for the experimental run (get idx for the experiment and the control along the way) 
             experimentFile = getFileName(a.ops, a.experiment, dateSonde, timeSonde)
             print("Reading {}".format(experimentFile))
-
+            # comment these two for dmget hackery...
             idxLon,idxLat =  getIndexFromAnalysis(experimentFile, latSonde, lonSonde)
             experimentOzone = getInterpolatedOzoneFromAnalysis(experimentFile, press_int, idxLon, idxLat)
 
             # now for the control
             controlFile = getFileName(a.ops, a.control, dateSonde, timeSonde)
             print("Reading {}".format(controlFile))
-
+#dmget"""
             #same grid, don't need to interpolate that again...
             controlOzone = getInterpolatedOzoneFromAnalysis(controlFile, press_int, idxLon, idxLat)
 
             # now for the sonde 
             interpolatedSondeOzone = interpolateSonde(1.0e15, pressSonde_hPa, ozSonde_mPa, press_edges)
-
             if(a.strict and ( any(controlOzone>1e3) or any(experimentOzone>1e3) ) ):
                 # skip this profile in stats. because it has unphysical values for ozone, and we're doing 
                 # strict rules
@@ -72,7 +79,13 @@ def go ( a ):
     idx = np.where( (ss['count_both'] > 1) & (press_int > 10))
 
     plotSondeAndAnalysisStats(press_int, ss, idx,  a.control, a.experiment, 'stats_'+a.experiment+'_'+a.control)
-
+#dmget"""
+def convertLongitude360(lon):
+    """
+    convert longitude from -180 to 180 to 0 to 360.
+    """
+    return float(lon)%360
+    
 def getPressureGridForOutput():
     """
     Get the pressure grid we want to interpolate to.
@@ -397,8 +410,22 @@ if __name__ == "__main__":
     parser.add_argument('--start', help = 'start dtg YYYYMMDDhh', required = True, dest = 'start')
     parser.add_argument('--end', help = 'end dtg YYYYMMDDhh', required = True, dest = 'end')
     parser.add_argument('--ops', help = 'Optional arg to specify ops archive.', required = False, dest = 'ops',default="/archive/u/bkarpowi")
-    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.', required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/ozone_sondes/woudc2018/")
     parser.add_argument('--strict', help="reject using any bad analysis levels for ozone.", dest='strict', action='store_false' )
-    parser.add_argument('--profiles', help = 'Optional arg to specify profile location.', required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
+    #Default uses ascension island for SHADOZ
+    parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-10")
+    parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="0")
+    parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="-15")
+    parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="-14")
+    # tropical pacific
+    #parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-20")
+    #parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="20")
+    #parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="60")
+    #parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="-90")
+
+    parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+                        required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
+    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+    #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/ozone_sondes/woudc2018/")
+
     a = parser.parse_args()
     go ( a ) 
