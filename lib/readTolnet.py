@@ -1,13 +1,29 @@
 import numpy as np
 import h5py,os 
 from datetime import datetime 
+
+def getDatetimeFromMJD(mjdIn):
+    """
+    Get a useful timestamp from the somewhat useless Modified Julian Day (MJD). 
+    *Grumble* Because we needed yet another variation on UNIX time, or Julian day... *Grumble*
+    """
+    diffBetweenMjdUnix = (datetime(2000,1,1) - datetime(1970,1,1)).total_seconds()
+    secondsMjd = 86400.0*mjdIn 
+    outArray = []
+    for s in secondsMjd:
+        outArray.append( datetime.utcfromtimestamp( s + diffBetweenMjdUnix ) )
+    
+    return np.asarray(outArray)
+
 def readTolnetH5(fname):
+    d = {}
+
     h5 = h5py.File(fname,'r')
 
     d['ALT'] = h5['ALTITUDE']
     d['Elevation'] = h5["ALTITUDE.INSTRUMENT"]
-    d['startTime'] = h5["DATETIME.START"]
-    d['endTime'] = h5["DATETIME.STOP"]
+    d['startTime'] = getDatetimeFromMJD(np.asarray( h5["DATETIME.START"]) ) 
+    d['endTime'] = getDatetimeFromMJD( np.asarray(h5["DATETIME.STOP"]) )
     d['dT'] = h5["INTEGRATION.TIME"]
     d['Lonitude']= h5["LATITUDE.INSTRUMENT"]
     d['Longitude']= h5["LONGITUDE.INSTRUMENT"] 
@@ -78,7 +94,7 @@ def readTolnetAscii(fname):
 
     return profileDicts    
 if __name__ == "__main__":
-    
+    """ 
     profileDicts = readTolnetAscii('UAH/TOLNet-O3Lidar_UAH_20180806_R0.dat')
     for i,d in enumerate(profileDicts):
         print('profile {:d}'.format(i)) 
@@ -96,13 +112,16 @@ if __name__ == "__main__":
             for kk in pvars:
                line+= "{:}".format(d[kk][i]) +','
             print(i,line)
-    
+    """
     fs = os.listdir('hdf/h5')[0]
-    fs = 'groundbased_lidar.o3_nasa.jpl003_table.mountain.ca_20180821t203649z_20180821t213630z_002.h5' 
+    #fs = 'groundbased_lidar.o3_nasa.jpl003_table.mountain.ca_20180821t203649z_20180821t213630z_002.h5' 
+    fs = 'groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180730t000014z_20180730t210014z_001.h5'
     d = readTolnetH5(os.path.join('hdf/h5',fs))
+    
     for p in  np.asarray(d['O3MR']):
         print (p)
-
+   
+    print(np.asarray(d['startTime'][:]))
     
 
 
