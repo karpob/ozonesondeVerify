@@ -17,27 +17,37 @@ def getDatetimeFromMJD(mjdIn):
 
 def readTolnetH5(fname):
     d = {}
-
+    profileDicts = []
     h5 = h5py.File(fname,'r')
 
-    d['ALT'] = h5['ALTITUDE']
-    d['Elevation'] = h5["ALTITUDE.INSTRUMENT"]
+    d['ALT'] = np.asarray( h5['ALTITUDE'] )
+    d['Elevation'] = np.asarray( h5["ALTITUDE.INSTRUMENT"])
     d['startTime'] = getDatetimeFromMJD(np.asarray( h5["DATETIME.START"]) ) 
     d['endTime'] = getDatetimeFromMJD( np.asarray(h5["DATETIME.STOP"]) )
-    d['dT'] = h5["INTEGRATION.TIME"]
-    d['Lonitude']= h5["LATITUDE.INSTRUMENT"]
-    d['Longitude']= h5["LONGITUDE.INSTRUMENT"] 
-    d['O3MR'] = h5["O3.MIXING.RATIO.VOLUME_DERIVED"]
-    d['O3MRUncert'] = h5["O3.MIXING.RATIO.VOLUME_DERIVED_UNCERTAINTY.COMBINED.STANDARD"]
-    d['O3ND'] = h5["O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL"]
-    #d['O3NDResol'] = h5["O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL_RESOLUTION.ALTITUDE.DF.CUTOFF"]
-    #d['Precision'] = h5["O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL_RESOLUTION.ALTITUDE.IMPULSE.RESPONSE"]
-    #d['ChRange'] = h5["O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL_RESOLUTION.ALTITUDE.DISTANCE.FROM.IMPULSE"]
-    #d['O3NDUncert'] = h5["O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL_UNCERTAINTY.COMBINED.STANDARD"]
-    d['Press'] = h5["PRESSURE_INDEPENDENT"]
-    d['Temp'] = h5["TEMPERATURE_INDEPENDENT"]
+    d['dT'] = np.asarray( h5["INTEGRATION.TIME"] ) 
+    d['Latitude']= np.asarray( h5["LATITUDE.INSTRUMENT"] ) 
+    d['Longitude']= np.asarray( h5["LONGITUDE.INSTRUMENT"] )  
+    d['O3MR'] = np.asarray( h5["O3.MIXING.RATIO.VOLUME_DERIVED"] )
+    d['O3MRUncert'] = np.asarray( h5["O3.MIXING.RATIO.VOLUME_DERIVED_UNCERTAINTY.COMBINED.STANDARD"] ) 
+    d['O3ND'] = np.asarray ( h5["O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL"] )
+    d['Press'] = np.asarray( h5["PRESSURE_INDEPENDENT"])
+    d['Temp'] = np.asarray(h5["TEMPERATURE_INDEPENDENT"])
 
-    return d
+    nProfiles, nLevels = d['O3MR'].shape
+    for i in range(0,nProfiles):
+        dd = {}
+        dd['startTime'] = d['startTime'][i]
+        dd['endTime'] = d['endTime'][i]
+        dd['O3MR'] = d['O3MR'][i,:]
+        dd['O3ND'] = d['O3ND'][i,:]
+        dd['Press'] = d['Press']
+        dd['Temp'] = d['Temp']
+        dd['Longitude'] = d['Longitude']
+        dd['Latitude'] = d['Latitude']
+        dd['Elevation'] = d['Elevation']
+        profileDicts.append(dd)
+        
+    return profileDicts
 
 def readTolnetAscii(fname):
     with open(fname) as f: lines = f.readlines()
@@ -92,10 +102,24 @@ def readTolnetAscii(fname):
             profileDict[p] = np.asarray(profileDict[p]) 
         profileDicts.append(profileDict)
 
-    return profileDicts    
+    return profileDicts
+
+def readTolnet( h5Files, datFiles ):
+    bigList = []
+    for f in h5Files:
+        bigList.extend(readTolnetH5(f))
+    for f in datFiles:
+        bigList.extend(readTolnetAscii(f)) 
+
+    return bigList
+    
 if __name__ == "__main__":
-    """ 
-    profileDicts = readTolnetAscii('UAH/TOLNet-O3Lidar_UAH_20180806_R0.dat')
+    fs = os.listdir('hdf/h5')[0]
+    #fs = 'groundbased_lidar.o3_nasa.jpl003_table.mountain.ca_20180821t203649z_20180821t213630z_002.h5' 
+    fs = 'groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180730t000014z_20180730t210014z_001.h5'
+
+    profileDicts = readTolnetH5(os.path.join('hdf/h5',fs))
+    #profileDicts = readTolnetAscii('UAH/TOLNet-O3Lidar_UAH_20180806_R0.dat')
     for i,d in enumerate(profileDicts):
         print('profile {:d}'.format(i)) 
         print(d['startTime'],d['endTime'])
@@ -112,17 +136,17 @@ if __name__ == "__main__":
             for kk in pvars:
                line+= "{:}".format(d[kk][i]) +','
             print(i,line)
+    
     """
     fs = os.listdir('hdf/h5')[0]
     #fs = 'groundbased_lidar.o3_nasa.jpl003_table.mountain.ca_20180821t203649z_20180821t213630z_002.h5' 
     fs = 'groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180730t000014z_20180730t210014z_001.h5'
     d = readTolnetH5(os.path.join('hdf/h5',fs))
     
-    for p in  np.asarray(d['O3MR']):
-        print (p)
+    #for p in  np.asarray(d['O3MR']):
+    #    print (p)
    
-    print(np.asarray(d['startTime'][:]))
-    
+    #print(np.asarray(d['startTime'][:]).shape)
 
-
+    """
 

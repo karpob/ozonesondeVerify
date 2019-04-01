@@ -3,6 +3,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.interpolate import InterpolatedUnivariateSpline
 from lib.sonde_io import readWoudc,readShadoz
+from lib.readTolnet import readTolnet
 # note: you'll need matplotlib ;)
 from lib.plots import plotSondeAndAnalysisStats
 
@@ -23,23 +24,38 @@ def go ( a ):
     endLat = float(a.end_lat)
 
     press_edges, press_int, nint = getPressureGridForOutput()
-    
-    sondeFiles = glob.glob(os.path.join(a.sonde_path,'*.csv'))
-    nsondes = len(sondeFiles)
 
-    if (nsondes == 0):
+    # *Sigh* This is not great, but work your way through and figure out which data we're reading 
+    sondeFilesCsv = glob.glob(os.path.join(a.sonde_path,'*.csv'))
+    nsondesCsv = len(sondeFiles)
+
+    sondeFilesH5 = glob.glob(os.path.join(a.sonde_path,'*.h5'))
+    nsondesH5 = len(sondeFiles)
+
+    sondeFilesDat = glob.glob(os.path.join(a.sonde_path,'*R0.dat'))
+    nsondesDat = len(sondeFilesDat)
+
+    if (nsondesCsv == 0 and nsondesH5 == 0 and nsondesDat == 0 ):
         sondeType = 'shadoz'
         sondeFiles = glob.glob(os.path.join(a.sonde_path,'*'))
         nsondes = len(sondeFiles)
-    else: sondeType = 'woudc'
-
-    sondeFiles.sort()
+        sondeFiles.sort()
+    elif (nsondesH5 > 0 or nsondesDat > 0):
+        #Note: we're going to be sneaky and read the tolnet files, and put them into a big 
+        #      structure. Then, use readProfile to extract each profile from the big structure
+        #      that we'll call sondeFiles. 
+        sondeFiles = readTolnet( sondeFilesDat, sondeFilesH5 )
+        sondeType = 'tolnet'
+    else: 
+        sondeType = 'woudc'
+        sondeFiles = sondeFilesCsv
+        sondeFiles.sort()
     # stats dictionary to populate
 
     ss = initProfileStats(nint)
     fcnt = 0
-    for s in sondeFiles:
-        lonSonde, latSonde, dateSonde, timeSonde, ozSonde_mPa, pressSonde_hPa, tempSonde_C = readProfile(s,sondeType)
+    for cnt,s in enumerate(sondeFiles):
+        lonSonde, latSonde, dateSonde, timeSonde, ozSonde_mPa, pressSonde_hPa, tempSonde_C = readProfile(s, sondeType, cnt)
         
         if(dateSonde >= a.start and dateSonde <= a.end and\
            convertLongitude360(lonSonde) >= startLon and convertLongitude360(lonSonde) <= endLon and\
@@ -144,7 +160,7 @@ def initProfileStats (nint):
     o['std_sonde'] = np.zeros(nint)
     return o
 
-def readProfile ( s, sondeType ):
+def readProfile ( s, sondeType, cnt):
     """
     Given a filename, and type of sonde, read the data into a common set of variables. 
     If you're bored, probably should make this more "classy" by using a factory class
@@ -171,7 +187,15 @@ def readProfile ( s, sondeType ):
         ozPartialPress_mPa = d['PROFILE']['O3 mPa']
         press_hPa = d['PROFILE']['Press hPa']
         temp_C = d['PROFILE']['Temp C']
-             
+    elif(sondType == 'tolnet'):
+        lon = s[cnt]['Longitude']
+        lat = s[cnt]['Latitude']
+        date = s[cnt]['startTime'].strftime("%Y%m%d")
+        time = s[cnt]['startTime'].strftime("%H:%M")
+        #1 hectopascal = 100000 millipascal
+        ozPartialPresss_mPa = s[cnt]['O3MR']*s[cnt]['Press']*100000.0
+        press_hPa = s[cnt]['Press']
+        temp_C = s[cnt]['Temp']
     elif(sondeType == 'woudc'): 
         d = readWoudc(s)
         lon = float(d['LOCATION']['Longitude'])
