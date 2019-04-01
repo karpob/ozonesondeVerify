@@ -32,21 +32,36 @@ def readTolnetH5(fname):
     d['O3ND'] = np.asarray ( h5["O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL"] )
     d['Press'] = np.asarray( h5["PRESSURE_INDEPENDENT"])
     d['Temp'] = np.asarray(h5["TEMPERATURE_INDEPENDENT"])
-
-    nProfiles, nLevels = d['O3MR'].shape
-    for i in range(0,nProfiles):
+    print(d['O3MR'].shape)
+    dims = d['O3MR'].shape
+    if(len(dims) > 1):
+        nProfiles, nLevels = dims[0],dims[1]
+        for i in range(0,nProfiles):
+            dd = {}
+            dd['startTime'] = d['startTime'][i]
+            dd['endTime'] = d['endTime'][i]
+            dd['O3MR'] = d['O3MR'][i,:]
+            dd['O3ND'] = d['O3ND'][i,:]
+            dd['Press'] = d['Press']
+            dd['Temp'] = d['Temp']
+            dd['Longitude'] = d['Longitude']
+            dd['Latitude'] = d['Latitude']
+            dd['Elevation'] = d['Elevation']
+            profileDicts.append(dd)
+    else:
         dd = {}
-        dd['startTime'] = d['startTime'][i]
-        dd['endTime'] = d['endTime'][i]
-        dd['O3MR'] = d['O3MR'][i,:]
-        dd['O3ND'] = d['O3ND'][i,:]
+        dd['startTime'] = d['startTime']
+        dd['endTime'] = d['endTime']
+        dd['O3MR'] = d['O3MR'][:]
+        dd['O3ND'] = d['O3ND'][:]
         dd['Press'] = d['Press']
         dd['Temp'] = d['Temp']
         dd['Longitude'] = d['Longitude']
         dd['Latitude'] = d['Latitude']
         dd['Elevation'] = d['Elevation']
         profileDicts.append(dd)
-        
+
+     
     return profileDicts
 
 def readTolnetAscii(fname):

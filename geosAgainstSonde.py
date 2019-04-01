@@ -27,10 +27,10 @@ def go ( a ):
 
     # *Sigh* This is not great, but work your way through and figure out which data we're reading 
     sondeFilesCsv = glob.glob(os.path.join(a.sonde_path,'*.csv'))
-    nsondesCsv = len(sondeFiles)
+    nsondesCsv = len(sondeFilesCsv)
 
     sondeFilesH5 = glob.glob(os.path.join(a.sonde_path,'*.h5'))
-    nsondesH5 = len(sondeFiles)
+    nsondesH5 = len(sondeFilesH5)
 
     sondeFilesDat = glob.glob(os.path.join(a.sonde_path,'*R0.dat'))
     nsondesDat = len(sondeFilesDat)
@@ -44,7 +44,7 @@ def go ( a ):
         #Note: we're going to be sneaky and read the tolnet files, and put them into a big 
         #      structure. Then, use readProfile to extract each profile from the big structure
         #      that we'll call sondeFiles. 
-        sondeFiles = readTolnet( sondeFilesDat, sondeFilesH5 )
+        sondeFiles = readTolnet( sondeFilesH5, sondeFilesDat )
         sondeType = 'tolnet'
     else: 
         sondeType = 'woudc'
@@ -54,15 +54,19 @@ def go ( a ):
 
     ss = initProfileStats(nint)
     fcnt = 0
-    for cnt,s in enumerate(sondeFiles):
-        lonSonde, latSonde, dateSonde, timeSonde, ozSonde_mPa, pressSonde_hPa, tempSonde_C = readProfile(s, sondeType, cnt)
+    for s in sondeFiles:
+        lonSonde, latSonde, dateSonde, timeSonde, ozSonde_mPa, pressSonde_hPa, tempSonde_C = readProfile(s, sondeType)
         
         if(dateSonde >= a.start and dateSonde <= a.end and\
            convertLongitude360(lonSonde) >= startLon and convertLongitude360(lonSonde) <= endLon and\
            float(latSonde) >= startLat and float(latSonde) <= endLat):
             fcnt+=1
-            print('file count',fcnt)
-            print("Sonde read in: {}".format(s) ) 
+            if (sondeType == 'tolnet'):
+                print('sonde count',fcnt)
+                print('Sonde Date and location Date:{} Lat:{} Lon:{}'.format(dateSonde,latSonde,lonSonde))
+            else:
+                print('file count',fcnt)
+                print("Sonde read in: {}".format(s) ) 
 
             # Do stuff for the experimental run (get idx for the experiment and the control along the way) 
             experimentFile = getFileName(a.ops, a.experiment, dateSonde, timeSonde)
@@ -160,7 +164,7 @@ def initProfileStats (nint):
     o['std_sonde'] = np.zeros(nint)
     return o
 
-def readProfile ( s, sondeType, cnt):
+def readProfile ( s, sondeType ):
     """
     Given a filename, and type of sonde, read the data into a common set of variables. 
     If you're bored, probably should make this more "classy" by using a factory class
@@ -187,15 +191,20 @@ def readProfile ( s, sondeType, cnt):
         ozPartialPress_mPa = d['PROFILE']['O3 mPa']
         press_hPa = d['PROFILE']['Press hPa']
         temp_C = d['PROFILE']['Temp C']
-    elif(sondType == 'tolnet'):
-        lon = s[cnt]['Longitude']
-        lat = s[cnt]['Latitude']
-        date = s[cnt]['startTime'].strftime("%Y%m%d")
-        time = s[cnt]['startTime'].strftime("%H:%M")
+    elif(sondeType == 'tolnet'):
+        print(type(s))
+        lon = s['Longitude']
+        lat = s['Latitude']
+        if( type( s['startTime'] ) == type( np.zeros([2] ) ) ): 
+            date = s['startTime'][0].strftime("%Y%m%d")
+            time = s['startTime'][0].strftime("%H:%M")
+        else:
+            date = s['startTime'].strftime("%Y%m%d")
+            time = s['startTime'].strftime("%H:%M")
         #1 hectopascal = 100000 millipascal
-        ozPartialPresss_mPa = s[cnt]['O3MR']*s[cnt]['Press']*100000.0
-        press_hPa = s[cnt]['Press']
-        temp_C = s[cnt]['Temp']
+        ozPartialPress_mPa = s['O3MR']*(1e-6)*s['Press']*100000.0
+        press_hPa = s['Press']
+        temp_C = s['Temp']
     elif(sondeType == 'woudc'): 
         d = readWoudc(s)
         lon = float(d['LOCATION']['Longitude'])
@@ -207,7 +216,8 @@ def readProfile ( s, sondeType, cnt):
         temp_C =  d['PROFILE']['Temperature']
     else:
         sys.exit("error don't know what profile this is!")
-    return lon, lat, date, time, ozPartialPress_mPa, press_hPa, temp_C
+   
+    return lon, lat, date, time, ozPartialPress_mPa.flatten(), press_hPa.flatten(), temp_C.flatten()
 
 def timeLookup(dateString, timeString):
     """
@@ -326,6 +336,7 @@ def interpolateSonde(undefinedValue, pressureIn, profileIn, pressEdgesOut):
 
     nlevs = pressEdgesOut.shape[0]-1
     interpolatedProfile = np.zeros(nlevs)
+    print('dbg size',pressureIn.shape, profileIn.shape, nlevs)
     for i in np.arange(0,nlevs):
         idx, = np.where( (pressureIn <= pressEdgesOut[i]) & (pressureIn >= pressEdgesOut[i+1]))
 
@@ -445,18 +456,26 @@ if __name__ == "__main__":
     parser.add_argument('--ops', help = 'Optional arg to specify ops archive.', required = False, dest = 'ops',default="/archive/u/bkarpowi")
     parser.add_argument('--strict', help="reject using any bad analysis levels for ozone.", dest='strict', action='store_false' )
     #Default uses ascension island for SHADOZ
-    parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-10")
-    parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="0")
-    parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="-15")
-    parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="-14")
+    #parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-10")
+    #parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="0")
+    #parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="-15")
+    #parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="-14")
     # tropical pacific
     #parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-20")
     #parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="20")
     #parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="60")
     #parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="-90")
 
+    #Default uses THE WORLD.
+    parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-90.0")
+    parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="90.0")
+    parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="0.0")
+    parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="359.9")
+ 
     parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-                        required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
+                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/TOLnet/hdf/h5")
+    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+    #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/ozone_sondes/woudc2018/")
 
