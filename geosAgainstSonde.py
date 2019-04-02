@@ -411,6 +411,8 @@ def finishStats( ss ):
             ss: stats dictionary
  
     """
+    diff1 = np.zeros(ss['count_sonde'].shape[0])
+    diff2 = np.zeros(ss['count_sonde'].shape[0])
     idxGoodSonde, = np.where( ss['count_sonde']>1 )
     idxGoodBoth, = np.where( ss['count_both'] > 1 )
 
@@ -420,9 +422,13 @@ def finishStats( ss ):
 
     ss['av_sonde_standalone'][idxGoodBoth] = ss['av_sonde_standalone'][idxGoodBoth]/ss['count_sonde'][idxGoodBoth]
 
-    diff1 = ss['av_ana1'][idxGoodBoth] - ss['av_sonde'][idxGoodBoth]
-    diff2 = ss['av_ana2'][idxGoodBoth] - ss['av_sonde'][idxGoodBoth]
-
+    diff1[idxGoodBoth] = ss['av_ana1'][idxGoodBoth] - ss['av_sonde'][idxGoodBoth]
+    diff2[idxGoodBoth] = ss['av_ana2'][idxGoodBoth] - ss['av_sonde'][idxGoodBoth]
+    print('whir')
+    print( np.shape(ss['std_ana1']) )
+    print( np.shape(ss['count_both']) )
+    print( np.shape(diff1) )
+    print( idxGoodBoth )
     ss['std_ana1'][idxGoodBoth] =  ss['std_ana1'][idxGoodBoth] - ss['count_both'][idxGoodBoth]*(diff1[idxGoodBoth])**2
     ss['std_ana1'][idxGoodBoth] =  np.sqrt(ss['std_ana1'][idxGoodBoth]/(ss['count_both'][idxGoodBoth]-1) ) 
 
@@ -473,7 +479,7 @@ if __name__ == "__main__":
     parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="359.9")
  
     parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/TOLnet/hdf/h5")
+                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/TOLnet/zip/larc/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
