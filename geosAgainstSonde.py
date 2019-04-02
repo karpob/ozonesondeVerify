@@ -56,7 +56,6 @@ def go ( a ):
     fcnt = 0
     for s in sondeFiles:
         lonSonde, latSonde, dateSonde, timeSonde, ozSonde_mPa, pressSonde_hPa, tempSonde_C = readProfile(s, sondeType)
-        
         if(dateSonde >= a.start and dateSonde <= a.end and\
            convertLongitude360(lonSonde) >= startLon and convertLongitude360(lonSonde) <= endLon and\
            float(latSonde) >= startLat and float(latSonde) <= endLat):
@@ -192,7 +191,6 @@ def readProfile ( s, sondeType ):
         press_hPa = d['PROFILE']['Press hPa']
         temp_C = d['PROFILE']['Temp C']
     elif(sondeType == 'tolnet'):
-        print(type(s))
         lon = s['Longitude']
         lat = s['Latitude']
         if( type( s['startTime'] ) == type( np.zeros([2] ) ) ): 
@@ -202,9 +200,12 @@ def readProfile ( s, sondeType ):
             date = s['startTime'].strftime("%Y%m%d")
             time = s['startTime'].strftime("%H:%M")
         #1 hectopascal = 100000 millipascal
-        ozPartialPress_mPa = s['O3MR']*(1e-6)*s['Press']*100000.0
-        press_hPa = s['Press']
-        temp_C = s['Temp']
+        # be careful when multiplying things that might have not flat shapes (1000,) vs (1000,1)
+        # you'll get matlab like square of matrix behavior...not what you're expecting?!?
+        # flatten the thing with the extra dimenaions (1000,1)
+        ozPartialPress_mPa = s['O3MR']*(1e-6)*s['Press'].flatten()*100000.0
+        press_hPa = s['Press'].flatten()
+        temp_C = s['Temp'].flatten()
     elif(sondeType == 'woudc'): 
         d = readWoudc(s)
         lon = float(d['LOCATION']['Longitude'])
@@ -217,7 +218,7 @@ def readProfile ( s, sondeType ):
     else:
         sys.exit("error don't know what profile this is!")
    
-    return lon, lat, date, time, ozPartialPress_mPa.flatten(), press_hPa.flatten(), temp_C.flatten()
+    return lon, lat, date, time, ozPartialPress_mPa, press_hPa, temp_C
 
 def timeLookup(dateString, timeString):
     """
@@ -333,12 +334,10 @@ def interpolateSonde(undefinedValue, pressureIn, profileIn, pressEdgesOut):
     Output:
             interpolatedProfile: ozone partial pressure (mPa) interpolated to output pressure grid.  
     """   
-
     nlevs = pressEdgesOut.shape[0]-1
     interpolatedProfile = np.zeros(nlevs)
-    print('dbg size',pressureIn.shape, profileIn.shape, nlevs)
     for i in np.arange(0,nlevs):
-        idx, = np.where( (pressureIn <= pressEdgesOut[i]) & (pressureIn >= pressEdgesOut[i+1]))
+        idx, = np.where( (pressureIn <= pressEdgesOut[i]) & (pressureIn >= pressEdgesOut[i+1]) & (profileIn > 0.0) )
 
         if(len(idx) == 0): interpolatedProfile[i] = undefinedValue 
         else: interpolatedProfile[i] = np.mean(profileIn[idx])
@@ -424,11 +423,7 @@ def finishStats( ss ):
 
     diff1[idxGoodBoth] = ss['av_ana1'][idxGoodBoth] - ss['av_sonde'][idxGoodBoth]
     diff2[idxGoodBoth] = ss['av_ana2'][idxGoodBoth] - ss['av_sonde'][idxGoodBoth]
-    print('whir')
-    print( np.shape(ss['std_ana1']) )
-    print( np.shape(ss['count_both']) )
-    print( np.shape(diff1) )
-    print( idxGoodBoth )
+
     ss['std_ana1'][idxGoodBoth] =  ss['std_ana1'][idxGoodBoth] - ss['count_both'][idxGoodBoth]*(diff1[idxGoodBoth])**2
     ss['std_ana1'][idxGoodBoth] =  np.sqrt(ss['std_ana1'][idxGoodBoth]/(ss['count_both'][idxGoodBoth]-1) ) 
 
@@ -479,7 +474,7 @@ if __name__ == "__main__":
     parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="359.9")
  
     parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/TOLnet/zip/larc/")
+                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/TOLnet/hdf/h5/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
