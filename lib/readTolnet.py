@@ -103,8 +103,12 @@ def readTolnetAscii(fname):
                     profileDict['Latitude'] = float(val.split(',')[1])
                     profileDict['Elevation'] = float(val.split(',')[2])
             else:
-                profileVariables = lines[iii].strip().replace(";","").split(',')
+                profileVariablesTmp = lines[iii].strip().replace(";","").split(',')
         iii+=1
+        profileVariables = []
+        #probably should replace this with a zip of some kind.
+        for p in profileVariablesTmp: profileVariables.append(p.replace(" ",""))
+
         for p in profileVariables:
             profileDict[p] = [] 
         while(iii <= end):
@@ -114,9 +118,10 @@ def readTolnetAscii(fname):
                 profileDict[p].append(float(strings[i])) 
             iii+=1
         for p in profileVariables:
-            profileDict[p] = np.asarray(profileDict[p]) 
+            #ascii files are in PPB for some reason, make it ppmv consistent with hdf
+            if('O3MR') in p: profileDict[p] = 1.0e-3*np.asarray(profileDict[p]) 
+            else: profileDict[p] = np.asarray(profileDict[p]) 
         profileDicts.append(profileDict)
-
     return profileDicts
 
 def readTolnet( h5Files, datFiles ):
