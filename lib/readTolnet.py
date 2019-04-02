@@ -32,7 +32,6 @@ def readTolnetH5(fname):
     d['O3ND'] = np.asarray ( h5["O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL"] )
     d['Press'] = np.asarray( h5["PRESSURE_INDEPENDENT"])
     d['Temp'] = np.asarray(h5["TEMPERATURE_INDEPENDENT"])
-    print(d['O3MR'].shape)
     dims = d['O3MR'].shape
     if(len(dims) > 1):
         nProfiles, nLevels = dims[0],dims[1]
@@ -119,7 +118,12 @@ def readTolnetAscii(fname):
             iii+=1
         for p in profileVariables:
             #ascii files are in PPB for some reason, make it ppmv consistent with hdf
-            if('O3MR') in p: profileDict[p] = 1.0e-3*np.asarray(profileDict[p]) 
+            if('O3MR') in p: 
+                profileDict[p] = 1.0e-3*np.asarray(profileDict[p])
+                # make -9.999 back into -999.9
+                idx, = np.where( profileDict[p] < -9.0 )
+                profileDict[p][idx] = -999.0
+ 
             else: profileDict[p] = np.asarray(profileDict[p]) 
         profileDicts.append(profileDict)
     return profileDicts
@@ -134,39 +138,14 @@ def readTolnet( h5Files, datFiles ):
     return bigList
     
 if __name__ == "__main__":
-    fs = os.listdir('hdf/h5')[0]
     #fs = 'groundbased_lidar.o3_nasa.jpl003_table.mountain.ca_20180821t203649z_20180821t213630z_002.h5' 
     fs = 'groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180730t000014z_20180730t210014z_001.h5'
+    fs = '../TOLnet/hdf/h5/groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180701t000010z_20180702t000010z_001.h5'
+    profileDicts1 = readTolnetH5(fs)
+    profileDicts2 = readTolnetAscii('../TOLnet/zip/larc/TOLNet-O3Lidar_LaRC_20180701_R0.dat')
+    print( list(profileDicts1[0].keys() ) )
+    print ( list(profileDicts2[0].keys()) )
+    for i in range(0,len(profileDicts1[100]['O3MR'][:])):  
+        print (profileDicts1[100]['Press'][i],profileDicts2[100]['Press'][i], profileDicts1[100]['Press'][i]-profileDicts2[100]['Press'][i]  )
 
-    profileDicts = readTolnetH5(os.path.join('hdf/h5',fs))
-    #profileDicts = readTolnetAscii('UAH/TOLNet-O3Lidar_UAH_20180806_R0.dat')
-    for i,d in enumerate(profileDicts):
-        print('profile {:d}'.format(i)) 
-        print(d['startTime'],d['endTime'])
-        print(d['Longitude'],d['Latitude'],d['Elevation'])
-        pvars = []
-        for k in list(d.keys()):
-            if (k not in ['Latitude', 'Longitude', 'Elevation', 'startTime','endTime']):
-                pvars.append(k)
-                cnt = d[k].shape[0]
-        print(pvars)
-        print(cnt)
-        for i in range(0,cnt):
-            line = ''
-            for kk in pvars:
-               line+= "{:}".format(d[kk][i]) +','
-            print(i,line)
-    
-    """
-    fs = os.listdir('hdf/h5')[0]
-    #fs = 'groundbased_lidar.o3_nasa.jpl003_table.mountain.ca_20180821t203649z_20180821t213630z_002.h5' 
-    fs = 'groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180730t000014z_20180730t210014z_001.h5'
-    d = readTolnetH5(os.path.join('hdf/h5',fs))
-    
-    #for p in  np.asarray(d['O3MR']):
-    #    print (p)
-   
-    #print(np.asarray(d['startTime'][:]).shape)
-
-    """
-
+    print(len(profileDicts1[100]['O3MR'][:]),len(profileDicts2[100]['O3MR'][:] ) )
