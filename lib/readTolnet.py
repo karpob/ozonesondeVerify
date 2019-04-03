@@ -1,5 +1,5 @@
 import numpy as np
-import h5py,os 
+import h5py,os,sys 
 from datetime import datetime 
 from pyhdf.SD import SD, SDC
 
@@ -26,19 +26,63 @@ def h4get(f,dset):
 def readTolnetH4(fname):
     d = {}
     profileDicts = []
-    h4 = SD(fname,SDC.READ)
+    h4 = SD( fname, SDC.READ )
+    #  get available records in hdf (you want this, sadly, because nobody calls o3 mixing ratio the same thing, 
+    # and in one case time isn't even called the same thing).
+    availableSDS = list(h4.datasets().keys())
 
     d['ALT'] = np.asarray( h4get(h4,'ALTITUDE') )
     d['Elevation'] = np.asarray( h4get(h4,"ALTITUDE.INSTRUMENT") )
-    d['startTime'] = getDatetimeFromMJD( np.asarray( h4get(h4,"DATETIME.START") ) ) 
-    d['endTime'] = getDatetimeFromMJD( np.asarray( h4get(h4,"DATETIME.STOP") ) )
+
+    #annoyingly time is different in one case, so we have ugly "ifs" here...
+    if 'DATETIME.START' in availableSDS: 
+        d['startTime'] = getDatetimeFromMJD( np.asarray( h4get(h4,"DATETIME.START") ) )
+    elif 'DATETIME' in availableSDS:
+        d['startTime'] = getDatetimeFromMJD( np.asarray( h4get(h4,"DATETIME") ) ) 
+    else:
+        sys.exit("Sorry. Time isn't even in this file: {}".format(fname))
+
+    # again for the FTIR Instruments, they only give one time
+    if 'DATETIME.STOP' in availableSDS:
+        d['endTime'] = getDatetimeFromMJD( np.asarray( h4get(h4,"DATETIME.STOP") ) )
+    elif 'DATETIME' in availableSDS: 
+        d['endTime'] = getDatetimeFromMJD( np.asarray( h4get(h4,"DATETIME") ) )
+
+
     d['dT'] = np.asarray( h4get(h4,"INTEGRATION.TIME") ) 
     d['Latitude']= np.asarray( h4get(h4,"LATITUDE.INSTRUMENT") ) 
-    d['Longitude']= np.asarray( h4get(h4,"LONGITUDE.INSTRUMENT") )  
-    d['O3MR'] = np.asarray( h4get(h4,"O3.MIXING.RATIO.VOLUME_DERIVED") )
-    d['O3MRUncert'] = np.asarray( h4get(h4,"O3.MIXING.RATIO.VOLUME_DERIVED_UNCERTAINTY.COMBINED.STANDARD") ) 
-    d['O3ND'] = np.asarray ( h4get(h4,"O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL") )
+    d['Longitude']= np.asarray( h4get(h4,"LONGITUDE.INSTRUMENT") )
+
+
+    # This gets fun, because everyone decided to call mixing ratio something slightly different.  
+    if 'O3.MIXING.RATIO.VOLUME_DERIVED' in availableSDS:
+        d['O3MR'] = np.asarray( h4get(h4,"O3.MIXING.RATIO.VOLUME_DERIVED") )
+    elif 'O3.MIXING.RATIO.VOLUME_EMISSION' in availableSDS: 
+        d['O3MR'] = np.asarray( h4get(h4,"O3.MIXING.RATIO.VOLUME_EMISSION") )
+    elif 'O3.MIXING.RATIO.VOLUME_ABSORPTION.SOLAR' in availableSDS:
+        d['O3MR'] = np.asarray( h4get(h4,"O3.MIXING.RATIO.VOLUME_ABSORPTION.SOLAR") )
+    else:
+        sys.exit("Weird file:{} No ozone information.".format(fname))
+
+    # same for uncertianty, although I haven't used it yet.
+    if 'O3.MIXING.RATIO.VOLUME_DERIVED_UNCERTAINTY.COMBINED.STANDARD' in availableSDS:
+        d['O3MRUncert'] = np.asarray( h4get(h4,"O3.MIXING.RATIO.VOLUME_DERIVED_UNCERTAINTY.COMBINED.STANDARD") )
+    elif 'O3.MIXING.RATIO.VOLUME_EMISSION_UNCERTAINTY.COMBINED.STANDARD' in availableSDS:
+        d['O3MRUncert'] = np.asarray( h4get(h4,"O3.MIXING.RATIO.VOLUME_EMISSION_UNCERTAINTY.COMBINED.STANDARD") )
+    elif 'O3.COLUMN_ABSORPTION.SOLAR_UNCERTAINTY.SYSTEMATIC.STANDARD' in availableSDS: 
+        d['O3MRUncert'] = np.asarray( h4get(h4,"O3.COLUMN_ABSORPTION.SOLAR_UNCERTAINTY.SYSTEMATIC.STANDARD") )
+    else:
+        sys.exit("Weird file:{} No ozone uncertianty information.".format(fname)) 
+
+    # if it's a lidar get number density. 
+    
+    if 'O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL' in availableSDS:
+        d['O3ND'] = np.asarray ( h4get(h4,"O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL") )
+    
     d['Press'] = np.asarray( h4get(h4,"PRESSURE_INDEPENDENT") )
+    # if we're reading a microwave just take the average pressure for the 9 values which I'm assuming are channels.
+    if(len(d['Press']) >1): d['Press'] = d['Press'].mean(axis=0)
+
     d['Temp'] = np.asarray( h4get(h4,"TEMPERATURE_INDEPENDENT") )
     dims = d['O3MR'].shape
     if(len(dims) > 1):
@@ -48,7 +92,7 @@ def readTolnetH4(fname):
             dd['startTime'] = d['startTime'][i]
             dd['endTime'] = d['endTime'][i]
             dd['O3MR'] = d['O3MR'][i,:]
-            dd['O3ND'] = d['O3ND'][i,:]
+            if('O3ND' in list( d.keys() ) ): dd['O3ND'] = d['O3ND'][i,:]
             dd['Press'] = d['Press']
             dd['Temp'] = d['Temp']
             dd['Longitude'] = d['Longitude']
@@ -60,7 +104,7 @@ def readTolnetH4(fname):
         dd['startTime'] = d['startTime']
         dd['endTime'] = d['endTime']
         dd['O3MR'] = d['O3MR'][:]
-        dd['O3ND'] = d['O3ND'][:]
+        if( 'O3ND' in list(d.keys())): dd['O3ND'] = d['O3ND'][:]
         dd['Press'] = d['Press']
         dd['Temp'] = d['Temp']
         dd['Longitude'] = d['Longitude']
@@ -201,13 +245,12 @@ def readTolnet( h5Files, datFiles ):
     
 if __name__ == "__main__":
     #fs = 'groundbased_lidar.o3_nasa.jpl003_table.mountain.ca_20180821t203649z_20180821t213630z_002.h5' 
-    fs = 'groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180730t000014z_20180730t210014z_001.h5'
-    fs = '../TOLnet/hdf/h5/groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180701t000010z_20180702t000010z_001.h5'
-    profileDicts1 = readTolnetH5(fs)
-    profileDicts2 = readTolnetAscii('../TOLnet/zip/larc/TOLNet-O3Lidar_LaRC_20180701_R0.dat')
+    #fs = 'groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180730t000014z_20180730t210014z_001.h5'
+    fs = '../ftp.cpc.ncep.noaa.gov/ndacc/station/rikubets/hdf/ftir/groundbased_ftir.o3_unagoya001_rikubetsu_20180117t031331z_20180727t010244z_002.hdf'  
+    #fs = '../TOLnet/hdf/h5/groundbased_lidar.o3_nasa.larc001_langley.research.center.va_20180701t000010z_20180702t000010z_001.h5'
+    profileDicts1 = readTolnetH4(fs)
+#    profileDicts2 = readTolnetAscii('../TOLnet/zip/larc/TOLNet-O3Lidar_LaRC_20180701_R0.dat')
     print( list(profileDicts1[0].keys() ) )
-    print ( list(profileDicts2[0].keys()) )
-    for i in range(0,len(profileDicts1[100]['O3MR'][:])):  
-        print (profileDicts1[100]['Press'][i],profileDicts2[100]['Press'][i], profileDicts1[100]['Press'][i]-profileDicts2[100]['Press'][i]  )
+    for i in range(0,len(profileDicts1[0]['O3MR'][:])):  
+        print (profileDicts1[0]['Press'][i],profileDicts1[0]['O3MR'][i]  )
 
-    print(len(profileDicts1[100]['O3MR'][:]),len(profileDicts2[100]['O3MR'][:] ) )
