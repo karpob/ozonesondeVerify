@@ -29,13 +29,13 @@ def go ( a ):
     sondeFilesCsv = glob.glob(os.path.join(a.sonde_path,'*.csv'))
     nsondesCsv = len(sondeFilesCsv)
 
-    sondeFilesH5 = glob.glob(os.path.join(a.sonde_path,'*.h5'))
-    nsondesH5 = len(sondeFilesH5)
+    sondeFilesHdf = glob.glob(os.path.join(a.sonde_path,'*.hdf'))
+    nsondesHdf = len(sondeFilesHdf)
 
     sondeFilesDat = glob.glob(os.path.join(a.sonde_path,'*R0.dat'))
     nsondesDat = len(sondeFilesDat)
 
-    if (nsondesCsv == 0 and nsondesH5 == 0 and nsondesDat == 0 ):
+    if (nsondesCsv == 0 and nsondesHdf == 0 and nsondesDat == 0 ):
         sondeType = 'shadoz'
         sondeFiles = glob.glob(os.path.join(a.sonde_path,'*'))
         nsondes = len(sondeFiles)
@@ -44,7 +44,7 @@ def go ( a ):
         #Note: we're going to be sneaky and read the tolnet files, and put them into a big 
         #      structure. Then, use readProfile to extract each profile from the big structure
         #      that we'll call sondeFiles. 
-        sondeFiles = readTolnet( sondeFilesH5, sondeFilesDat )
+        sondeFiles = readTolnet( sondeFilesHdf, sondeFilesDat )
         sondeType = 'tolnet'
     else: 
         sondeType = 'woudc'
@@ -53,52 +53,72 @@ def go ( a ):
     # stats dictionary to populate
 
     ss = initProfileStats(nint)
-    fcnt = 0
+    controlAnalysisFiles = []
+    experimentAnalysisFiles = []
+    sondeData = []
+    # A little bit inefficient, but make two passes. First, make a list of files to dmget off dirac, and grab sonde data. 
+    # Second loop, actually do stuff.
     for s in sondeFiles:
         lonSonde, latSonde, dateSonde, timeSonde, ozSonde_mPa, pressSonde_hPa, tempSonde_C = readProfile(s, sondeType)
         if(dateSonde >= a.start and dateSonde <= a.end and\
            convertLongitude360(lonSonde) >= startLon and convertLongitude360(lonSonde) <= endLon and\
            float(latSonde) >= startLat and float(latSonde) <= endLat):
-            fcnt+=1
-            if (sondeType == 'tolnet'):
-                print('sonde count',fcnt)
-                print('Sonde Date and location Date:{} Lat:{} Lon:{}'.format(dateSonde,latSonde,lonSonde))
-            else:
-                print('file count',fcnt)
-                print("Sonde read in: {}".format(s) ) 
 
             # Do stuff for the experimental run (get idx for the experiment and the control along the way) 
-            experimentFile = getFileName(a.ops, a.experiment, dateSonde, timeSonde)
-            print("Reading {}".format(experimentFile))
-            v="ssh dirac 'dmget "+experimentFile+"'"
-            os.system(v)
-            # comment these two for dmget hackery...
-            idxLon,idxLat =  getIndexFromAnalysis(experimentFile, latSonde, lonSonde)
-            experimentOzone = getInterpolatedOzoneFromAnalysis(experimentFile, press_int, idxLon, idxLat)
+            experimentAnalysisFiles.append(getFileName(a.ops, a.experiment, dateSonde, timeSonde))
 
             # now for the control
-            controlFile = getFileName(a.ops, a.control, dateSonde, timeSonde)
-            print("Reading {}".format(controlFile))
-            v="ssh dirac 'dmget "+controlFile+"'"
-            os.system(v)
-            print('done dirac')
+            controlAnalysisFiles.append(getFileName(a.ops, a.control, dateSonde, timeSonde))
 
-#"""
-            #same grid, don't need to interpolate that again...
-            controlOzone = getInterpolatedOzoneFromAnalysis(controlFile, press_int, idxLon, idxLat)
+            sondeDict = {}
+            sondeDict['lon'] = lonSonde
+            sondeDict['lat'] = latSonde
+            sondeDict['date'] = dateSonde
+            sondeDict['time'] = timeSonde
+            sondeDict['oz_mPa'] = ozSonde_mPa
+            sondeDict['press_hPa'] = pressSonde_hPa
+            sondeDict['temperature_C'] = tempSonde_C
+            sondeData.append(sondeDict) 
+    
+    # do dmget
+    controlString = " ".join(controlAnalysisFiles)
+    print("dmget on control analysis files "+controlString) 
+    os.system('dmget '+ controlString)
+    print('done dmget.')
+    experimentString = " ".join(experimentAnalysisFiles)
+    print("dmget on experiment analysis files "+experimentString) 
+    os.system('dmget '+ controlString)
+    print('done dmget...for good!')
 
-            # now for the sonde 
-            interpolatedSondeOzone = interpolateSonde(1.0e15, pressSonde_hPa, ozSonde_mPa, press_edges)
-            if(a.strict and ( any(controlOzone>1e3) or any(experimentOzone>1e3) ) ):
-                # skip this profile in stats. because it has unphysical values for ozone, and we're doing 
-                # strict rules
-                print("Skipping this sonde because analysis possibly bad:{} {}".format(os.path.basename(controlFile), os.path.basename(experimentFile)))
-                continue
-            else:
-                print("using analysis.")
-                
-            # s for statistics on profiles
-            ss = updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone )
+    fcnt = 0
+    #Actually do stuff.
+    for i,s in enumerate(sondeData):
+        fcnt+=1
+        if (sondeType == 'tolnet'):
+            print('sonde count',fcnt)
+            print('Sonde Date and location Date:{} Lat:{} Lon:{}'.format(s['date'],s['lat'],s['lon']))
+        else:
+            print('file count',fcnt)
+            print("Sonde read in: {}".format(s) ) 
+        # use sonde latitude to get x,y from analysis.
+        idxLon,idxLat =  getIndexFromAnalysis(experimentAnalysisFiles[i], s['lat'], s['lon'])
+        experimentOzone = getInterpolatedOzoneFromAnalysis(experimentAnalysisFiles[i], press_int, idxLon, idxLat)
+        
+        #same grid, don't need to interpolate that again...
+        controlOzone = getInterpolatedOzoneFromAnalysis(controlAnalysisFiles[i], press_int, idxLon, idxLat)
+
+        # now for the sonde 
+        interpolatedSondeOzone = interpolateSonde(1.0e15, s['press_hPa'], s['oz_mPa'], press_edges)
+        if(a.strict and ( any(controlOzone>1e3) or any(experimentOzone>1e3) ) ):
+            # skip this profile in stats. because it has unphysical values for ozone, and we're doing 
+            # strict rules
+            print("Skipping this sonde because analysis possibly bad:{} {}".format(os.path.basename(controlFile), os.path.basename(experimentFile)))
+            continue
+        else:
+            print("using analysis.")
+              
+        # s for statistics on profiles
+        ss = updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone )
 
     ss = finishStats( ss )
     writeH5(a, ss, press_int)
@@ -106,7 +126,7 @@ def go ( a ):
     idx = np.where( (ss['count_both'] > 1) & (press_int > 10))
 
     plotSondeAndAnalysisStats(press_int, ss, idx,  a.control, a.experiment, 'stats_'+a.experiment+'_'+a.control)
-#"""
+
 def convertLongitude360(lon):
     """
     convert longitude from -180 to 180 to 0 to 360.
@@ -292,7 +312,7 @@ def getIndexFromAnalysis(analysisFile, latSonde, lonSonde):
     idxLat = np.nanargmin((np.asarray(lats)-float(latSonde))**2.0)
     print('Index Lon, Index Lat, grid lon, grid lat, sonde lon, sonde lat')
     print(idxLon, idxLat, lons[idxLon], lats[idxLat], lonSonde, latSonde)
-
+    h5.close()
     return idxLon, idxLat
 
 def getInterpolatedOzoneFromAnalysis(analysisFile, press_int, idxLon, idxLat):
@@ -320,7 +340,7 @@ def getInterpolatedOzoneFromAnalysis(analysisFile, press_int, idxLon, idxLat):
     #fOz = interp1d(np.log(pressureAnalysisFlipped[idxOz]), ozoneAnalysisFlipped[idxOz], kind='cubic' )
     interpolatedOzone = fOz( np.log(pressureInterpolatedLevelsFlipped) )     
     interpolatedOzone = np.flipud(interpolatedOzone)
-
+    h5.close()
     return interpolatedOzone
 
 def interpolateSonde(undefinedValue, pressureIn, profileIn, pressEdgesOut):
