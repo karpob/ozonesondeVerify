@@ -40,7 +40,7 @@ def go ( a ):
         sondeFiles = glob.glob(os.path.join(a.sonde_path,'*'))
         nsondes = len(sondeFiles)
         sondeFiles.sort()
-    elif (nsondesH5 > 0 or nsondesDat > 0):
+    elif (nsondesHdf > 0 or nsondesDat > 0):
         #Note: we're going to be sneaky and read the tolnet files, and put them into a big 
         #      structure. Then, use readProfile to extract each profile from the big structure
         #      that we'll call sondeFiles. 
@@ -492,9 +492,12 @@ if __name__ == "__main__":
     parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="90.0")
     parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="0.0")
     parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="359.9")
+
  
     parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/TOLnet/hdf/h5/")
+                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/wollong/hdf/ftir/")
+    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+    #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/maunaloa/hdf/mwave/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
