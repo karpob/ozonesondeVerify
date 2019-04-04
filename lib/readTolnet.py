@@ -80,10 +80,8 @@ def readTolnetH4(fname):
         d['O3ND'] = np.asarray ( h4get(h4,"O3.NUMBER.DENSITY_ABSORPTION.DIFFERENTIAL") )
     
     d['Press'] = np.asarray( h4get(h4,"PRESSURE_INDEPENDENT") )
-    # if we're reading a microwave just take the average pressure for the 9 values which I'm assuming are channels.
-    if(len(d['Press']) >1): d['Press'] = d['Press'].mean(axis=0)
-
     d['Temp'] = np.asarray( h4get(h4,"TEMPERATURE_INDEPENDENT") )
+
     dims = d['O3MR'].shape
     if(len(dims) > 1):
         nProfiles, nLevels = dims[0],dims[1]
@@ -93,8 +91,8 @@ def readTolnetH4(fname):
             dd['endTime'] = d['endTime'][i]
             dd['O3MR'] = d['O3MR'][i,:]
             if('O3ND' in list( d.keys() ) ): dd['O3ND'] = d['O3ND'][i,:]
-            dd['Press'] = d['Press']
-            dd['Temp'] = d['Temp']
+            dd['Press'] = d['Press'][i,:]
+            dd['Temp'] = d['Temp'][i,:]
             dd['Longitude'] = d['Longitude']
             dd['Latitude'] = d['Latitude']
             dd['Elevation'] = d['Elevation']
