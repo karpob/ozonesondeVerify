@@ -1,2 +1,2 @@
-Basic plotting tool for verification of GEOS ozone using SHADOZ, and WOUDC ozonesondes.
+Basic plotting tool for verification of GEOS ozone using SHADOZ, and WOUDC ozonesondes. Additionally, preliminary support for using LIDAR data from TOLnet/NDACC. Capability to read NDACC FTIR, and Microwave instruments exist, however, proper validation using this code needs some work.
 
