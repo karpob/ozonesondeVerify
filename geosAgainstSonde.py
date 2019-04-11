@@ -2,6 +2,7 @@ import os, h5py, argparse, glob, math,sys
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.interpolate import InterpolatedUnivariateSpline
+from scipy import interp
 from lib.sonde_io import readWoudc,readShadoz
 from lib.readTolnet import readTolnet
 # note: you'll need matplotlib ;)
@@ -56,6 +57,7 @@ def go ( a ):
     controlAnalysisFiles = []
     experimentAnalysisFiles = []
     sondeData = []
+    sondeFilesUsed = []
     # A little bit inefficient, but make two passes. First, make a list of files to dmget off dirac, and grab sonde data. 
     # Second loop, actually do stuff.
     for s in sondeFiles:
@@ -78,7 +80,8 @@ def go ( a ):
             sondeDict['oz_mPa'] = ozSonde_mPa
             sondeDict['press_hPa'] = pressSonde_hPa
             sondeDict['temperature_C'] = tempSonde_C
-            sondeData.append(sondeDict) 
+            sondeData.append(sondeDict)
+            sondeFilesUsed.append(s) 
     
     # do dmget
     controlString = " ".join(controlAnalysisFiles)
@@ -90,42 +93,52 @@ def go ( a ):
     os.system('dmget '+ controlString)
     print('done dmget...for good!')
 
-    fcnt = 0
+    fcnt = 1
     #Actually do stuff.
     for i,s in enumerate(sondeData):
-        fcnt+=1
         if (sondeType == 'tolnet'):
             print('sonde count',fcnt)
             print('Sonde Date and location Date:{} Lat:{} Lon:{}'.format(s['date'],s['lat'],s['lon']))
         else:
             print('file count',fcnt)
-            print("Sonde read in: {}".format(s) ) 
+            print("Sonde read in: {}".format(sondeFilesUsed[i]) ) 
         # use sonde latitude to get x,y from analysis.
         idxLon,idxLat =  getIndexFromAnalysis(experimentAnalysisFiles[i], s['lat'], s['lon'])
+        print('Reading Experiment Analysis File: {}'.format(experimentAnalysisFiles[i]))
         experimentOzone = getInterpolatedOzoneFromAnalysis(experimentAnalysisFiles[i], press_int, idxLon, idxLat)
         
         #same grid, don't need to interpolate that again...
+
+        print('Reading Control Analysis File: {}'.format(controlAnalysisFiles[i]))
         controlOzone = getInterpolatedOzoneFromAnalysis(controlAnalysisFiles[i], press_int, idxLon, idxLat)
 
-        # now for the sonde 
-        interpolatedSondeOzone = interpolateSonde(1.0e15, s['press_hPa'], s['oz_mPa'], press_edges)
-        if(a.strict and ( any(controlOzone>1e3) or any(experimentOzone>1e3) ) ):
-            # skip this profile in stats. because it has unphysical values for ozone, and we're doing 
-            # strict rules
-            print("Skipping this sonde because analysis possibly bad:{} {}".format(os.path.basename(controlFile), os.path.basename(experimentFile)))
+        # now for the sonde
+        # if it's a regular sonde with lots of points do Kris' thing and average points into a layer.
+        if (s['press_hPa'].shape[0] > 2*press_int.shape[0]):
+            print('using layer average for sonde interpolation.') 
+            interpolatedSondeOzone = interpolateSonde(np.nan, s['press_hPa'], s['oz_mPa'], press_edges)
+        else:
+            print('using spline for sonde interpolation.') 
+            interpolatedSondeOzone = interpolateSondeSpline(np.nan, s['press_hPa'], s['oz_mPa'], press_int)
+        if( a.strict and ( any( np.isnan(controlOzone) ) or any( np.isnan(experimentOzone) ) )  ):
+            # skip this profile in stats. because you're picky and don't like when the surface pressure goes above the bottom of the profile. 
+            print("Skipping this sonde because analysis possibly bad (all nans for ozone in analysis):{} {}".format(os.path.basename(controlAnalysisFiles[i]), os.path.basename(experimentAnalysisFiles[i])))
+            print("control Ozone", controlOzone)
+            print("experiment Ozone", experimentOzone)
+            print("a.strict", a.strict)
             continue
         else:
-            print("using analysis.")
+            print("Using sonde analysis is not suspect (all nans for ozone in analysis).")
               
         # s for statistics on profiles
         ss = updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone )
-
+        fcnt+=1
     ss = finishStats( ss )
     writeH5(a, ss, press_int)
     # plot only pressure above 10 hPa
-    idx = np.where( (ss['count_both'] > 1) & (press_int > 10))
+    idx = np.where( (ss['count_both'] > 1) & ( press_int > float(a.ptop) ) )
 
-    plotSondeAndAnalysisStats(press_int, ss, idx,  a.control, a.experiment, 'stats_'+a.experiment+'_'+a.control)
+    plotSondeAndAnalysisStats(press_int, ss, idx, float(a.ptop), float(a.pbot),  a.control, a.experiment, 'stats_'+a.experiment+'_'+a.control)
 
 def convertLongitude360(lon):
     """
@@ -329,18 +342,29 @@ def getInterpolatedOzoneFromAnalysis(analysisFile, press_int, idxLon, idxLat):
     h5 = h5py.File(analysisFile,'r')
     levs = np.asarray(h5['lev'])
     geosO3 = np.asarray(h5['O3'])
+    idxBad = np.where( ( geosO3 >= 1e15 ) )
+    geosO3[idxBad] = np.nan
     oz = np.asarray(geosO3[0,:,idxLat,idxLon])*604229.0*0.1*np.asarray(levs)
-    
+    h5.close()
+
     pressureAnalysisFlipped = np.flipud(np.asarray(levs))
     pressureInterpolatedLevelsFlipped = np.flipud(press_int) 
-    ozoneAnalysisFlipped = np.flipud(oz)    
-    interpolatedOzone = np.zeros(press_int.shape[0]) 
-    idxOz, = np.where( (ozoneAnalysisFlipped > 0.0) &  (ozoneAnalysisFlipped <100) )
+    ozoneAnalysisFlipped = np.flipud(oz)
+
+    interpolatedOzone = np.zeros(press_int.shape[0])
+    # For this collection, if surface pressure greater than the level, you're going to fill values of 1e15, or NaNs.
+    # Let us only use "good" values for interpolation. 
+    idxOz, = np.where( (ozoneAnalysisFlipped > 0.0) & np.isfinite(ozoneAnalysisFlipped) ) 
     fOz = InterpolatedUnivariateSpline(np.log(pressureAnalysisFlipped[idxOz]), ozoneAnalysisFlipped[idxOz], k=3) 
-    #fOz = interp1d(np.log(pressureAnalysisFlipped[idxOz]), ozoneAnalysisFlipped[idxOz], kind='cubic' )
-    interpolatedOzone = fOz( np.log(pressureInterpolatedLevelsFlipped) )     
+    interpolatedOzone = fOz( np.log(pressureInterpolatedLevelsFlipped) )
+    maxValidP = pressureAnalysisFlipped[idxOz].max()
+    minValidP = pressureAnalysisFlipped[idxOz].min()
+    # Avoid generating data points, when we don't really have any. If we got an interpolated value which is outside
+    # the model grid (higher than the surface pressure), don't try to interpret it! 
+    idxOutsideGrid, = np.where( (pressureInterpolatedLevelsFlipped > maxValidP ) | (pressureInterpolatedLevelsFlipped < minValidP ) )
+    interpolatedOzone[idxOutsideGrid] = np.nan     
     interpolatedOzone = np.flipud(interpolatedOzone)
-    h5.close()
+
     return interpolatedOzone
 
 def interpolateSonde(undefinedValue, pressureIn, profileIn, pressEdgesOut):
@@ -353,16 +377,51 @@ def interpolateSonde(undefinedValue, pressureIn, profileIn, pressEdgesOut):
             pressEdgesOut: pressure edges used to place pressures on interpolate grid
     Output:
             interpolatedProfile: ozone partial pressure (mPa) interpolated to output pressure grid.  
-    """   
+    """
+
+       
     nlevs = pressEdgesOut.shape[0]-1
     interpolatedProfile = np.zeros(nlevs)
     for i in np.arange(0,nlevs):
         idx, = np.where( (pressureIn <= pressEdgesOut[i]) & (pressureIn >= pressEdgesOut[i+1]) & (profileIn > 0.0) )
-
-        if(len(idx) == 0): interpolatedProfile[i] = undefinedValue 
+        if(len(idx) == 0): interpolatedProfile[i] = undefinedValue
         else: interpolatedProfile[i] = np.mean(profileIn[idx])
         
     return interpolatedProfile
+
+def interpolateSondeSpline(undefinedValue, pressureIn, profileIn, press_int):
+    """
+    Interpolate sonde ozone profile to desired pressure press_int
+    Input:
+            undefinedValue: value which says the value is undefined (nan-like)
+            pressureIn: pressure (hPa) of the sonde 
+            profileIn: ozone partial pressure (mPa) of the sonde 
+            press_int: pressure layer for interpolation
+    Output:
+            interpolatedProfile: ozone partial pressure (mPa) interpolated to output pressure grid.  
+    """
+
+       
+    interpolatedProfile = np.zeros(press_int.shape[0])
+
+    pressureInFlipped = np.flipud(np.asarray(pressureIn))
+    pressureInterpolatedLevelsFlipped = np.flipud(press_int) 
+    profileInFlipped = np.flipud(profileIn)
+    
+    idxOz, = np.where( (profileInFlipped > 0.0) )  
+    fOz = InterpolatedUnivariateSpline(np.log(pressureInFlipped[idxOz]), profileInFlipped[idxOz], k=3) 
+    #fOz = interp1d(np.log(pressureAnalysisFlipped[idxOz]), ozoneAnalysisFlipped[idxOz], kind='cubic' )
+    interpolatedProfile = fOz( np.log(pressureInterpolatedLevelsFlipped) )     
+    interpolatedProfile = np.flipud(interpolatedProfile)
+
+
+    validPressureInFlipped = pressureInFlipped[ idxOz ]
+    minValid, maxValid = validPressureInFlipped.min(), validPressureInFlipped.max()
+    idxInvalid = np.where((press_int <= minValid) | (press_int >= maxValid )  ) 
+    interpolatedProfile[idxInvalid] = undefinedValue 
+  
+    return interpolatedProfile
+
 def updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone ):
     """
     Compute and update stats for a given profile. 
@@ -389,10 +448,12 @@ def updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone ):
     """
 
     # The introduction of potentially bad portions of analysis profile leads to having to break out index
-    # into sondes for sonde and "both" for rms error stats. 
-    idxGoodSonde, = np.where( (interpolatedSondeOzone < 1.0e15) & (interpolatedSondeOzone > 0.0) )
-    idxGoodBoth, = np.where ( (interpolatedSondeOzone < 1.0e15) & (interpolatedSondeOzone > 0.0) &\
-                        (controlOzone < 1e3) & (experimentOzone <1e3) & (controlOzone > 0.0) & (experimentOzone >0.0) ) 
+    # into sondes for sonde and "both" for rms error stats.
+    
+    # using nans may not be the greatest idea, as these lines will give you a warning, but will work.
+    idxGoodSonde, = np.where( np.isfinite(interpolatedSondeOzone) & (interpolatedSondeOzone > 0.0) )
+    idxGoodBoth, = np.where ( np.isfinite(interpolatedSondeOzone) & (interpolatedSondeOzone > 0.0) &\
+                        np.isfinite(controlOzone) & np.isfinite(experimentOzone) & (controlOzone > 0.0) & (experimentOzone > 0.0) ) 
         
     ss['count_sonde'][idxGoodSonde] = ss['count_sonde'][idxGoodSonde] + 1.0 
     ss['count_both'][idxGoodBoth] = ss['count_both'][idxGoodBoth] + 1.0
@@ -475,7 +536,9 @@ if __name__ == "__main__":
     parser.add_argument('--start', help = 'start dtg YYYYMMDDhh', required = True, dest = 'start')
     parser.add_argument('--end', help = 'end dtg YYYYMMDDhh', required = True, dest = 'end')
     parser.add_argument('--ops', help = 'Optional arg to specify ops archive.', required = False, dest = 'ops',default="/archive/u/bkarpowi")
-    parser.add_argument('--strict', help="reject using any bad analysis levels for ozone.", dest='strict', action='store_false' )
+    parser.add_argument('--strict', help="reject using any bad analysis levels for ozone.", dest='strict', action='store_true' )
+    parser.add_argument('--top', help="top pressure to use in profile.", dest='ptop', default='10.0' )
+    parser.add_argument('--bottom', help="bottom pressure to use in profile.", dest='pbot', default='1000.0' )
     #Default uses ascension island for SHADOZ
     #parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-10")
     #parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="0")
@@ -495,7 +558,7 @@ if __name__ == "__main__":
 
  
     parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/wollong/hdf/ftir/")
+                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/maunaloa/hdf/mwave/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/maunaloa/hdf/mwave/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
