@@ -74,11 +74,15 @@ def readShadoz(a):
             # this line is a little wacky to get rid of whitespace at the end of metadata tag
             if(sizeLL>1):
                 o[ " ".join(ll.split(': ')[0].replace('   ','').split()) ] = ll.split(': ')[1]
-        elif 'Time' in l:
+        elif ('Time' in l) or ('Level' in l and 'Press' in l):
             variablesAndJunk = l.strip().split('  ')
             variables = []
             for v in variablesAndJunk:
-                if(v != ''): variables.append(v)
+                if(v != '') and 'O3 # DN O3 Res' not in v: variables.append(v)
+                if 'O3 # DN O3 Res' in v:
+                    variables.append('O3 # DN')
+                    variables.append('O3 Res')
+                 
             units = lines[i+1].strip().split()
             o['PROFILE'] = {}
             profileNames = []
@@ -111,35 +115,6 @@ def readShadoz(a):
     
 if __name__ == "__main__":
     #a = '/archive/u/kwargan/data/ozone_sondes/woudc2018/20181214.ecc.z.z32286.fmi-smna.csv'
-    a = '/archive/u/kwargan/data/SHADOZ/ascen_20180103T12_V05.1_R.dat'
-    #o = readWoudc(a)
-    print('lon, lat, date, hour, minute, oz, press, temp')
-    #print( list(o.keys()))
-    #print( o['TIMESTAMP'])
-    """
-    oo = o['PROFILE']                 
-    print ( 'Pressure', 'O3PartialPressure', 'Temperature', 'WindSpeed', 'WindDirection', 'LevelCode', 'Duration', 'GPHeight', 'RelativeHumidity', 'SampleTemperature')
-    for i in range(len(oo['Pressure'])):
-         print ( oo['Pressure'][i], oo['O3PartialPressure'][i],oo['Temperature'][i],oo['WindSpeed'][i], oo['WindDirection'][i], oo['LevelCode'][i],oo['Duration'][i],oo['GPHeight'][i],oo['RelativeHumidity'][i], oo['SampleTemperature'][i] )
-    """
-    
-    o,names = readShadoz(a)  
-    oo = o['PROFILE']
-    print(list(oo.keys()))
-    print(list(o.keys()))
-    print( o['Launch Time (UT)'])
-    print( o['Launch Date'])
-    """ 
-    lon = o['Longitude (deg)']
-    lat = o['Latitude (deg)']
-    date = o['Launch Date']
-    time = o['Launch Time (UT)']
-    oz = o['PROFILE']['O3 mPa']
-    press = o['PROFILE']]['Press hPa']
-    temp = o['PROFILE']['Temp C']
-['Time sec', 'Press hPa', ' Alt km', 'Temp C', 'RH %', 'O3 mPa', 'O3 ppmv', 'O3 du', 'W Dir deg', ' W Spd m/s', 'T Pump C', 'I O3 uA', ' GPS lon deg', ' GPS lat deg', ' GPS alt km']
-['NASA/GSFC/SHADOZ Archive', 'SHADOZ Version', 'SHADOZ format data created', 'STATION', 'SHADOZ Principal Investigator', 'Station Principal Investigator(s)', 'Latitude (deg)', 'Longitude (deg)', 'Elevation (m)', 'Launch Date', 'Launch Time (UT)', 'Highest level reached (hPa)', 'Integrated O3 until EOF (DU)', 'Sonde/MLS Climatology(1988-2010)', 'Sonde Instrument, SN', 'Radiosonde, SN', 'KI Solution', 'Applied pump corrections', 'Pump flow rate (sec/100ml)', 'Background current (uA)', 'Missing or bad values', 'PROFILE']
-
-#    for i in range(len(oo['Press hPa'])):
-#       print(  oo['Time sec'][i], oo['O3 ppmv'][i])
-    """     
+    a = '/discover/nobackup/projects/gmao/obsdev/bkarpowi/SouthPole/sp001_2003_06_07_21.l100'
+    o,names = readShadoz(a)
+    print (o['PROFILE'])
