@@ -63,8 +63,8 @@ def go ( a ):
     for s in sondeFiles:
         lonSonde, latSonde, dateSonde, timeSonde, ozSonde_mPa, pressSonde_hPa, tempSonde_C = readProfile(s, sondeType)
         if(dateSonde >= a.start and dateSonde <= a.end and\
-           convertLongitude360(lonSonde) >= startLon and convertLongitude360(lonSonde) <= endLon and\
-           float(latSonde) >= startLat and float(latSonde) <= endLat):
+            convertLongitude360(lonSonde) >= startLon and convertLongitude360(lonSonde) <= endLon and\
+            float(latSonde) >= startLat and float(latSonde) <= endLat):
 
             # Do stuff for the experimental run (get idx for the experiment and the control along the way) 
             experimentAnalysisFiles.append(getFileName(a.ops, a.experiment, dateSonde, timeSonde))
@@ -101,7 +101,7 @@ def go ( a ):
             print('Sonde Date and location Date:{} Lat:{} Lon:{}'.format(s['date'],s['lat'],s['lon']))
         else:
             print('file count',fcnt)
-            print("Sonde read in: {}".format(sondeFilesUsed[i]) ) 
+            print("Sonde read in: {}".format(sondeFilesUsed[i]) )
         # use sonde latitude to get x,y from analysis.
         idxLon,idxLat =  getIndexFromAnalysis(experimentAnalysisFiles[i], s['lat'], s['lon'])
         print('Reading Experiment Analysis File: {}'.format(experimentAnalysisFiles[i]))
@@ -216,11 +216,22 @@ def readProfile ( s, sondeType ):
     """
     if(sondeType == 'shadoz'): 
         d,names = readShadoz(s)
-        lon = d['Longitude (deg)']
-        lat = d['Latitude (deg)']
-        date = d['Launch Date']
-        time = d['Launch Time (UT)']
-        ozPartialPress_mPa = d['PROFILE']['O3 mPa']
+        for k in list(d.keys()):
+            if('Longitude' in k): lonKey = k
+            elif('Latitude' in k): latKey = k
+            elif('Launch Date' in k): lDate = k
+            elif('Launch Time' in k ): lTime = k 
+        lon = d[lonKey]
+        lat = d[latKey]
+        date = d[lDate]
+        time = d[lTime]
+        print(list(d['PROFILE'].keys()))
+        if('O3 mPa' in list(d['PROFILE'].keys())):
+            ozPartialPress_mPa = d['PROFILE']['O3 mPa']
+        elif('Ozone mPa' in list(d['PROFILE'].keys())):
+            ozPartialPress_mPa = d['PROFILE']['Ozone mPa']
+        else:
+            sys.exit('No valid key for Ozone mPa in SHADOZ dataset.')
         press_hPa = d['PROFILE']['Press hPa']
         temp_C = d['PROFILE']['Temp C']
     elif(sondeType == 'tolnet'):
@@ -526,8 +537,6 @@ def writeH5( a, ss, press_int ):
         for k in list(ss.keys()):
             dset = f.create_dataset(k,data=ss[k])
         dset = f.create_dataset('pressure', data = press_int )
-
-
  
 if __name__ == "__main__":
     parser = argparse.ArgumentParser( description = 'compare ozone sondes')
@@ -558,7 +567,9 @@ if __name__ == "__main__":
 
  
     parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/maunaloa/hdf/mwave/")
+                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerifyCp/TOLnet/UAH/")
+    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+    #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerifyCp/ftp.cpc.ncep.noaa.gov/ndacc/station/ohp/hdf/lidar/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/maunaloa/hdf/mwave/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
