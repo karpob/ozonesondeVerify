@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+from datetime import datetime
 def readWoudc(a):
     """
     Reads in WOUDC ascii data format for ozonesondes.
@@ -92,6 +93,17 @@ def readShadoz(a):
                 o['PROFILE'][vv+' '+units[ii]] = []
                 profileNames.append(vv+' '+units[ii])
             profileStart = i+2
+    # add extra bit to make sure date comes back as number not something a human would use like April.
+    for k in list(o.keys()):
+        if 'Launch Date' in k:
+            lDateKey = k
+        elif 'Launch Time' in k:
+            lTimeKey = k 
+
+    if( not o[lDateKey].isdigit() ):
+        o[lDateKey] = datetime.strptime(o[lDateKey],"%d %B %Y").strftime("%Y%m%d")
+    if ('GMT' in o[lTimeKey]):
+        o[lTimeKey] = ':'.join(o[lTimeKey].split(':')[0:2])
     for l in lines[profileStart::]:
         for i,v in enumerate(l.strip().split()):
             if('Time' in profileNames[i]):
