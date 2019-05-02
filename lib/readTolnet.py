@@ -81,6 +81,13 @@ def readTolnetH4(fname):
     
     d['Press'] = np.asarray( h4get(h4,"PRESSURE_INDEPENDENT") )
     d['Temp'] = np.asarray( h4get(h4,"TEMPERATURE_INDEPENDENT") )
+    if(len(d['Press'].shape)==2):    
+        if (d['Press'][0,0]<d['Press'][0,1]): flipIt = True
+        else:flipIt = False
+    else:
+        if (d['Press'][0]<d['Press'][1]): flipIt = True
+        else:flipIt = False
+ 
 
     dims = d['O3MR'].shape
     if(len(dims) > 1):
@@ -89,10 +96,15 @@ def readTolnetH4(fname):
             dd = {}
             dd['startTime'] = d['startTime'][i]
             dd['endTime'] = d['endTime'][i]
-            dd['O3MR'] = d['O3MR'][i,:]
-            if('O3ND' in list( d.keys() ) ): dd['O3ND'] = d['O3ND'][i,:]
-            dd['Press'] = d['Press'][i,:]
-            dd['Temp'] = d['Temp'][i,:]
+            if (flipIt): dd['O3MR'] = d['O3MR'][i,::-1]
+            else: dd['O3MR'] = d['O3MR'][i,:]
+            if('O3ND' in list( d.keys() ) ): 
+                if(flipIt):dd['O3ND'] = d['O3ND'][i,::-1]
+                else: dd['O3ND'] = d['O3ND'][i,:]
+            if(flipIt):dd['Press'] = d['Press'][i,::-1]
+            else:dd['Press'] = d['Press'][i,:]
+            if(flipIt): dd['Temp'] = d['Temp'][i,::-1]
+            else:dd['Temp'] = d['Temp'][i,:]
             dd['Longitude'] = d['Longitude']
             dd['Latitude'] = d['Latitude']
             dd['Elevation'] = d['Elevation']
@@ -101,14 +113,22 @@ def readTolnetH4(fname):
         dd = {}
         dd['startTime'] = d['startTime']
         dd['endTime'] = d['endTime']
-        dd['O3MR'] = d['O3MR'][:]
-        if( 'O3ND' in list(d.keys())): dd['O3ND'] = d['O3ND'][:]
-        dd['Press'] = d['Press']
-        dd['Temp'] = d['Temp']
+        if(flipIt): dd['O3MR'] = d['O3MR'][::-1]
+        else: dd['O3MR'] = d['O3MR'][:]
+        if( 'O3ND' in list(d.keys())): 
+            if(flipIt): dd['O3ND'] = d['O3ND'][::-1]
+            else: dd['O3ND'] = d['O3ND'][:]
+        if(flipIt): dd['Press'] = d['Press'][::-1]
+        else: dd['Press'] = d['Press']
+        if(flipIt): dd['Temp'] = d['Temp'][::-1]
+        else: dd['Temp'] = d['Temp']
         dd['Longitude'] = d['Longitude']
         dd['Latitude'] = d['Latitude']
         dd['Elevation'] = d['Elevation']
         profileDicts.append(dd)
+   
+ 
+
     # because they had to be different..same as ".close()" would be for any other api in the universe.
     h4.end() 
     return profileDicts
