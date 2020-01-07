@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os, h5py, argparse, glob, math,sys
 import numpy as np
 from scipy.interpolate import interp1d
