@@ -82,7 +82,6 @@ def go ( a ):
             sondeDict['temperature_C'] = tempSonde_C
             sondeData.append(sondeDict)
             sondeFilesUsed.append(s) 
-    
     # do dmget
     controlString = " ".join(controlAnalysisFiles)
     print("dmget on control analysis files "+controlString) 
@@ -92,7 +91,6 @@ def go ( a ):
     print("dmget on experiment analysis files "+experimentString) 
     os.system('dmget '+ controlString)
     print('done dmget...for good!')
-
     fcnt = 1
     #Actually do stuff.
     for i,s in enumerate(sondeData):
@@ -138,7 +136,7 @@ def go ( a ):
     # plot only pressure above 10 hPa
     idx = np.where( (ss['count_both'] > 1) & ( press_int > float(a.ptop) ) )
 
-    plotSondeAndAnalysisStats(press_int, ss, idx, float(a.ptop), float(a.pbot),  a.control, a.experiment, 'stats_'+a.experiment+'_'+a.control)
+    plotSondeAndAnalysisStats(press_int, ss, idx, float(a.ptop), float(a.pbot),  a.control, a.experiment, 'stats_'+a.experiment+'_'+a.control, a.cname, a.ename)
 
 def convertLongitude360(lon):
     """
@@ -546,8 +544,10 @@ if __name__ == "__main__":
     parser.add_argument('--end', help = 'end dtg YYYYMMDDhh', required = True, dest = 'end')
     parser.add_argument('--ops', help = 'Optional arg to specify ops archive.', required = False, dest = 'ops',default="/archive/u/bkarpowi")
     parser.add_argument('--strict', help="reject using any bad analysis levels for ozone.", dest='strict', action='store_true' )
-    parser.add_argument('--top', help="top pressure to use in profile.", dest='ptop', default='10.0' )
+    parser.add_argument('--top', help="top pressure to use in profile.", dest='ptop', default='1.0' )
     parser.add_argument('--bottom', help="bottom pressure to use in profile.", dest='pbot', default='1000.0' )
+    parser.add_argument('--cname', help="control name.", dest='cname', default='control' )
+    parser.add_argument('--ename', help="experiment name.", dest='ename', default='experiment' )
     #Default uses ascension island for SHADOZ
     #parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-10")
     #parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="0")
@@ -565,9 +565,10 @@ if __name__ == "__main__":
     parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="0.0")
     parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="359.9")
 
+
  
-    parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerifyCp/TOLnet/UAH/")
+    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+    #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerifyCp/TOLnet/UAH/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerifyCp/ftp.cpc.ncep.noaa.gov/ndacc/station/ohp/hdf/lidar/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
@@ -576,6 +577,9 @@ if __name__ == "__main__":
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/ozone_sondes/woudc2018/")
-
+    parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/V01_UNCERTAINTY_2018/")
+    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+    #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/ozone_sondes/SouthPole/")
     a = parser.parse_args()
     go ( a ) 

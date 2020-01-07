@@ -3,12 +3,13 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import numpy as np
 
-def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName,  tag):
-
+def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName,  tag, cname,  ename):
+    controlName = cname #'Control'
+    experimentName = ename #'9.6 $\mu$m Initial Selection'
     f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, sharex='col',sharey='row')
     f.suptitle('Ozone Sonde Count:{:d}'.format(int(max(o['count_sonde']) )) ) 
     ax1.plot( o['av_sonde'][idx], p[idx],'k', label='Sondes' )
-    ax1.plot( o['av_ana1'][idx], p[idx],'g', label = controlName )
+    ax1.plot( o['av_ana1'][idx], p[idx],'r', label = controlName )
     ax1.set_yscale('log')
     ax1.set_ylim([bottom,top])
     ax1.invert_yaxis()
@@ -49,7 +50,7 @@ def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName
     ax3.set_ylabel('Pressure [hPa]')
     ax3.set_xlabel('Ozone [mPa]')
     ax4.set_xlabel('Difference Ozone [mPa]')
-    print("Saving plot: {}".format(tag+'_profileStats.png'))
-    plt.savefig(tag+'_profileStats.png')
+    print("Saving plot: {}".format(tag+'_profileStats.pdf'))
+    plt.savefig(tag+'_profileStats.pdf')
     plt.close()
 
