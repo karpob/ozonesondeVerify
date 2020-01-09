@@ -38,9 +38,10 @@ def readWoudc(a):
     
     #loop through lines that mark the profile, and populate dictionary.
     for l in lines[profileLine+2:endLine]:
-        
         if(',,,' in l): l = l.replace(',,,',',-999.99,-999.99,') 
         if(',,' in l): l = l.replace(',,',',-999.99,')
+        if(',     ,     ,' in l): l = l.replace(',     ,     ,',',-999.99,-999.99,')
+        if(',     ,' in l): l = l.replace(',     ,',',-999.99,')
         if '*' in l: continue
         for i,v in enumerate(l.strip().split(',')):
             if (profileNames[i] == 'LevelCode'):
@@ -59,7 +60,8 @@ def readWoudc(a):
     for p in profileNames: o['PROFILE'][p] = np.asarray(o['PROFILE'][p])
     idx, = np.where(o['PROFILE']['O3PartialPressure'] != -999.99)
     for k in list(o['PROFILE'].keys()):
-        o['PROFILE'][k] = o['PROFILE'][k][idx]
+        if len(o['PROFILE'][k]) >= len(idx):
+            o['PROFILE'][k] = o['PROFILE'][k][idx]
     return o
 
 def readShadoz5(a):
