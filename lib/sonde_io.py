@@ -19,6 +19,9 @@ def readWoudc(a):
         if '#' in l:            
             if(',,' in l): l = l.replace(',,',',-999.99,') 
             if('#PRELAUNCH' in l): endLine = i
+            if('#PROFILE_UNCERTAINTY' in l):
+                endLine = i
+                break
             #Make dictonary of dictoniaries using # names as first metadata header stripping off #
             o[l.strip().replace('#','')] = {}
             # for everything except profile create sub dictionary with headers on next line, and data on following line.
@@ -35,6 +38,7 @@ def readWoudc(a):
     
     #loop through lines that mark the profile, and populate dictionary.
     for l in lines[profileLine+2:endLine]:
+        
         if(',,,' in l): l = l.replace(',,,',',-999.99,-999.99,') 
         if(',,' in l): l = l.replace(',,',',-999.99,')
         if '*' in l: continue
