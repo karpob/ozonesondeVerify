@@ -26,12 +26,15 @@ def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName
     ax3.set_yticklabels(['1000.0','100.0','10.0','1.0'])
     ax3.legend(prop={'size':7})
 
+    if ( any (o['count_both']>1) ): plotRms = True
+    else: plotRms=False
     d = o['av_ana1'][idx] - o['av_sonde'][idx]
     d1max = max(abs(d)) + max(o['std_ana1'][idx])
+
     ax2.plot( d,p[idx],'k')
     ax2.plot( d,p[idx],'ko',markersize=2.5)
     ax2.set_ylim([bottom,top])
-    ax2.fill_betweenx(p[idx],d+o['std_ana1'][idx], d-o['std_ana1'][idx], color='grey' )
+    if(plotRms): ax2.fill_betweenx(p[idx],d+o['std_ana1'][idx], d-o['std_ana1'][idx], color='grey' )
     ax2.axvline(x=0, color='black')
 
     d = o['av_ana2'][idx] - o['av_sonde'][idx]
@@ -41,7 +44,7 @@ def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName
 
     ax4.plot( d,p[idx],'k')
     ax4.plot( d,p[idx],'ko', markersize=2.5)
-    ax4.fill_betweenx(p[idx],d+o['std_ana2'][idx], d-o['std_ana2'][idx], color='grey' )
+    if(plotRms): ax4.fill_betweenx(p[idx],d+o['std_ana2'][idx], d-o['std_ana2'][idx], color='grey' )
     ax4.set_ylim([bottom,top])
     ax4.set_xlim((-1.0*dmax,dmax))
     ax4.axvline(x=0, color='black')

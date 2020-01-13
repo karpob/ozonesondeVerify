@@ -135,7 +135,10 @@ def go ( a ):
     ss = finishStats( ss )
     writeH5(a, ss, press_int)
     # plot only pressure above 10 hPa
-    idx = np.where( (ss['count_both'] > 1) & ( press_int > float(a.ptop) ) )
+    if(fcnt > 2):
+        idx = np.where( (ss['count_both'] > 1) & ( press_int > float(a.ptop) ) )
+    else:
+        idx = np.where( (ss['count_both'] > 0) & ( press_int > float(a.ptop) ) )
 
     plotSondeAndAnalysisStats(press_int, ss, idx, float(a.ptop), float(a.pbot),  a.control, a.experiment, 'stats_'+a.experiment+'_'+a.control, a.cname, a.ename)
 
@@ -543,7 +546,7 @@ if __name__ == "__main__":
     parser.add_argument('--control',help = 'control', required = True, dest='control')
     parser.add_argument('--start', help = 'start dtg YYYYMMDDhh', required = True, dest = 'start')
     parser.add_argument('--end', help = 'end dtg YYYYMMDDhh', required = True, dest = 'end')
-    parser.add_argument('--ops', help = 'Optional arg to specify ops archive.', required = False, dest = 'ops',default="/archive/u/bkarpowi")
+    parser.add_argument('--ops', help = 'Optional arg to specify ops archive.', required = False, dest = 'ops',default="/archive/u/bkarpowi/")
     parser.add_argument('--strict', help="reject using any bad analysis levels for ozone.", dest='strict', action='store_true' )
     parser.add_argument('--top', help="top pressure to use in profile.", dest='ptop', default='1.0' )
     parser.add_argument('--bottom', help="bottom pressure to use in profile.", dest='pbot', default='1000.0' )
@@ -574,12 +577,10 @@ if __name__ == "__main__":
     #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerifyCp/ftp.cpc.ncep.noaa.gov/ndacc/station/ohp/hdf/lidar/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/maunaloa/hdf/mwave/")
-    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-    #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
+    parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+                        required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/ozone_sondes/woudc2018/")
-    parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
-                        required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/V01_UNCERTAINTY_2018/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/ozone_sondes/SouthPole/")
     a = parser.parse_args()
