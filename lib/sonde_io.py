@@ -282,10 +282,11 @@ def readShadoz(a):
     """
     Overarching reader for SHADOZ. Selects which version based of filename (Yuck, but hey -- you figure out a better way!)
     """
-    if ('V05.1_R' in os.path.split(a)[-1] ): return readShadoz5(a)
+    if ('V05.1_R' in os.path.split(a)[-1] or '.l100' in os.path.split(a)[-1] ): return readShadoz5(a)
     elif('V06' in os.path.split(a)[-1] ): return readShadoz6(a)
     elif('SHADOZV01_uncertainty' in os.path.split(a)[-1] ): return readShadozU1(a)
     else:
+        
         print('Unknown version of SHADOZ data. Looking for V05.1, V06, or SHADOZV01_uncertainty in filename.')
         sys.exit(1)
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ def go ( a ):
     Output:
             a plot tagged with experiment and control, along with and hdf5 with stats plotted. 
     """
-
+    print(a.sonde_path)
     startLon = convertLongitude360(a.start_lon)
     endLon = convertLongitude360(a.end_lon)
 
@@ -29,6 +29,7 @@ def go ( a ):
 
     # *Sigh* This is not great, but work your way through and figure out which data we're reading 
     sondeFilesCsv = glob.glob(os.path.join(a.sonde_path,'*.csv'))
+    sondeFilesCsv.extend( glob.glob( os.path.join( a.sonde_path,'*.CSV' ) ) )
     nsondesCsv = len(sondeFilesCsv)
 
     sondeFilesHdf = glob.glob(os.path.join(a.sonde_path,'*.hdf'))
@@ -130,7 +131,7 @@ def go ( a ):
             print("Using sonde analysis is not suspect (all nans for ozone in analysis).")
               
         # s for statistics on profiles
-        ss = updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone )
+        ss = updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone, s['lat'], s['lon'] )
         fcnt+=1
     ss = finishStats( ss )
     writeH5(a, ss, press_int)
@@ -140,7 +141,7 @@ def go ( a ):
     else:
         idx = np.where( (ss['count_both'] > 0) & ( press_int > float(a.ptop) ) )
 
-    plotSondeAndAnalysisStats(press_int, ss, idx, float(a.ptop), float(a.pbot),  a.control, a.experiment, 'stats_'+a.experiment+'_'+a.control, a.cname, a.ename)
+    plotSondeAndAnalysisStats(press_int, ss, idx, float(a.ptop), float(a.pbot),  a.control, a.experiment, os.path.join(a.output,'stats_'+a.experiment+'_'+a.control+'.pdf'), a.cname, a.ename)
 
 def convertLongitude360(lon):
     """
@@ -184,6 +185,8 @@ def initProfileStats (nint):
             o['std_ana1']:            rms between control analysis and sondes
             o['std_ana2']:            rms between experiment analysis and sondes 
             o['std_sonde']:           std of the sondes
+            o['lat']:                 lat of the sondes
+            o['lon']:                 lon of the sondes
            
     """
     o = {} 
@@ -196,6 +199,8 @@ def initProfileStats (nint):
     o['std_ana1']   = np.zeros(nint)
     o['std_ana2']   = np.zeros(nint)
     o['std_sonde'] = np.zeros(nint)
+    o['lat'] = []
+    o['lon'] = []
     return o
 
 def readProfile ( s, sondeType ):
@@ -435,7 +440,7 @@ def interpolateSondeSpline(undefinedValue, pressureIn, profileIn, press_int):
   
     return interpolatedProfile
 
-def updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone ):
+def updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone, lat, lon ):
     """
     Compute and update stats for a given profile. 
     These are really running tallies. 
@@ -455,6 +460,9 @@ def updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone ):
             interpolatedSondeOzone: ozone sonde profile interpolated to grid (mPa)
             controlOzone: ozone profile from control analysis interpolated to grid (mPa)
             experimentOzone: ozone profile from experiment analysis interpolated to grid (mPa)
+            lat :            latitude of profile
+            lon :            longitude of profile
+
     Output:
             ss: stats dictionary
  
@@ -481,6 +489,8 @@ def updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone ):
     ss['std_ana2'][idxGoodBoth] =  ss['std_ana2'][idxGoodBoth] + (experimentOzone[idxGoodBoth] -interpolatedSondeOzone[idxGoodBoth])**2
     # here std is std
     ss['std_sonde'][idxGoodSonde] =  ss['std_sonde'][idxGoodSonde] + (interpolatedSondeOzone[idxGoodSonde])**2
+    ss['lat'].append(float(lat))
+    ss['lon'].append(float(lon))
     return ss
 
 def finishStats( ss ):
@@ -525,6 +535,8 @@ def finishStats( ss ):
     ss['std_ana2'][idxGoodBoth] =  np.sqrt(ss['std_ana2'][idxGoodBoth]/(ss['count_both'][idxGoodBoth]-1) ) 
     ss['std_sonde'][idxGoodSonde] = ss['std_sonde'][idxGoodSonde] - ss['count_sonde'][idxGoodSonde]*(ss['av_sonde_standalone'][idxGoodSonde])**2
     ss['std_sonde'][idxGoodSonde] = np.sqrt( ss['std_sonde'][idxGoodSonde] / (ss['count_sonde'][idxGoodSonde]-1) )
+    ss['lat'] = np.asarray(ss['lat'])
+    ss['lon'] = np.asarray(ss['lon'])
     return ss
 def writeH5( a, ss, press_int ):
     """
@@ -535,7 +547,8 @@ def writeH5( a, ss, press_int ):
     Output: 
             hdf5 file: {experiment}_{control}_output_stats.h5 output to wherever the script is running. (cwd)
     """
-    with h5py.File(a.experiment +'_'+ a.control +'_output_stats.h5','w') as f:
+    print("writing {}".format(os.path.join(a.output, a.experiment +'_'+ a.control +'_output_stats.h5')))
+    with h5py.File(os.path.join(a.output, a.experiment +'_'+ a.control +'_output_stats.h5'),'w') as f:
         for k in list(ss.keys()):
             dset = f.create_dataset(k,data=ss[k])
         dset = f.create_dataset('pressure', data = press_int )
@@ -552,22 +565,23 @@ if __name__ == "__main__":
     parser.add_argument('--bottom', help="bottom pressure to use in profile.", dest='pbot', default='1000.0' )
     parser.add_argument('--cname', help="control name.", dest='cname', default='control' )
     parser.add_argument('--ename', help="experiment name.", dest='ename', default='experiment' )
+    parser.add_argument('--output', help="output path.", dest='output', default=os.getcwd() )
     #Default uses ascension island for SHADOZ
     #parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-10")
     #parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="0")
     #parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="-15")
     #parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="-14")
     # tropical pacific
-    #parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-20")
-    #parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="20")
-    #parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="60")
-    #parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="-90")
+    parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-20")
+    parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="20")
+    parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="60")
+    parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="-90")
 
     #Default uses THE WORLD.
-    parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-90.0")
-    parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="90.0")
-    parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="0.0")
-    parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="359.9")
+    #parser.add_argument('--slat', help = 'southern most latitude', required = False, dest = 'start_lat',default="-90.0")
+    #parser.add_argument('--nlat', help = 'northern most latitude', required = False, dest = 'end_lat',default="90.0")
+    #parser.add_argument('--wlon', help = 'western most longitude', required = False, dest = 'start_lon',default="0.0")
+    #parser.add_argument('--elon', help = 'eastern most longitude', required = False, dest = 'end_lon',default="359.9")
 
 
  
@@ -579,6 +593,9 @@ if __name__ == "__main__":
     #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/github/ozonesondeVerify/ftp.cpc.ncep.noaa.gov/ndacc/station/maunaloa/hdf/mwave/")
     parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
                         required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/SHADOZ/")
+
+    #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
+    #                    required = False, dest = 'sonde_path',default="/discover/nobackup/bkarpowi/SHADOZ_by_station/ascen/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\
     #                    required = False, dest = 'sonde_path',default="/archive/u/kwargan/data/ozone_sondes/woudc2018/")
     #parser.add_argument('--profiles', help = 'Optional arg to specify profile location.',\

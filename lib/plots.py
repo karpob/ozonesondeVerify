@@ -3,7 +3,7 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import numpy as np
 
-def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName,  tag, cname,  ename):
+def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName,  plotFilename, cname,  ename):
     controlName = cname #'Control'
     experimentName = ename #'9.6 $\mu$m Initial Selection'
     f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, sharex='col',sharey='row')
@@ -34,7 +34,10 @@ def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName
     ax2.plot( d,p[idx],'k')
     ax2.plot( d,p[idx],'ko',markersize=2.5)
     ax2.set_ylim([bottom,top])
-    if(plotRms): ax2.fill_betweenx(p[idx],d+o['std_ana1'][idx], d-o['std_ana1'][idx], color='grey' )
+    if(plotRms): 
+        ax2.fill_betweenx( p[idx], d+o['std_ana1'][idx], d-o['std_ana1'][idx], color='grey' )
+        ax2.plot( o['std_ana1'][idx], p[idx], color='khaki', alpha=0.5 )
+        ax2.plot( o['std_ana1'][idx], p[idx], color = 'khaki', marker = 's', markersize = 1.5, alpha = 0.5 )
     ax2.axvline(x=0, color='black')
 
     d = o['av_ana2'][idx] - o['av_sonde'][idx]
@@ -44,7 +47,10 @@ def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName
 
     ax4.plot( d,p[idx],'k')
     ax4.plot( d,p[idx],'ko', markersize=2.5)
-    if(plotRms): ax4.fill_betweenx(p[idx],d+o['std_ana2'][idx], d-o['std_ana2'][idx], color='grey' )
+    if(plotRms): 
+        ax4.fill_betweenx(p[idx],d+o['std_ana2'][idx], d-o['std_ana2'][idx], color='grey' )
+        ax4.plot( o['std_ana2'][idx], p[idx], color = 'khaki', alpha = 0.5 )
+        ax4.plot( o['std_ana2'][idx], p[idx], color = 'khaki', alpha = 0.5, marker = 's', markersize = 1.5 )
     ax4.set_ylim([bottom,top])
     ax4.set_xlim((-1.0*dmax,dmax))
     ax4.axvline(x=0, color='black')
@@ -53,7 +59,7 @@ def plotSondeAndAnalysisStats(p, o, idx,top, bottom, controlName, experimentName
     ax3.set_ylabel('Pressure [hPa]')
     ax3.set_xlabel('Ozone [mPa]')
     ax4.set_xlabel('Difference Ozone [mPa]')
-    print("Saving plot: {}".format(tag+'_profileStats.pdf'))
-    plt.savefig(tag+'_profileStats.pdf')
+    print("Saving plot: {}".format(plotFilename))
+    plt.savefig(plotFilename)
     plt.close()
 
