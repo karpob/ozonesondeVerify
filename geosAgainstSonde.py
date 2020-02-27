@@ -91,7 +91,7 @@ def go ( a ):
     print('done dmget.')
     experimentString = " ".join(experimentAnalysisFiles)
     print("dmget on experiment analysis files "+experimentString) 
-    os.system('dmget '+ controlString)
+    os.system('dmget '+ experimentString)
     print('done dmget...for good!')
     fcnt = 1
     #Actually do stuff.
