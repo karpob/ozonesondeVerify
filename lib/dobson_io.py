@@ -9,6 +9,7 @@ def readWoudc(a):
     Yeah... should comment this madness at some point.
     Let's just say it reads in an ascii file tags meta data and reads OBSERVATIONS data in that order
     """
+    print('filename',a)
     o = {}
     OBSERVATIONSNames = []
     #open file and read in lines.
@@ -29,7 +30,7 @@ def readWoudc(a):
             if '#OBSERVATIONS' not in l:
                 for ii,var in enumerate(lines[i+1].strip().split(',')):
                     if (ii < len(lines[i+2].strip().split(','))):
-                        o[l.strip().replace('#','')][var] = lines[i+2].strip().split(',')[ii]
+                        o[l.strip().replace('#','')][var.replace(' ','')] = lines[i+2].strip().split(',')[ii]
             # for #OBSERVATIONS use the next line for metadata, and initialize arrays for each metadata tag, mark where OBSERVATIONS starts
             else:
                 for var in lines[i+1].strip().split(','):
@@ -47,14 +48,14 @@ def readWoudc(a):
         for i,v in enumerate(l.strip().split(',')):
             if ('Time' in OBSERVATIONSNames[i] ):
                 timestring = o['TIMESTAMP']['Date']+'T'+v
-                print(l)
-                print(v)
                 if(len(v)>0):
-                    print(timestring+o['TIMESTAMP']['UTCOffset'][0:5])
                     aa = parse(timestring+o['TIMESTAMP']['UTCOffset'][0:5])
                     o['OBSERVATIONS'][OBSERVATIONSNames[i]].append(aa)
+            elif( 'ColumnO3' == OBSERVATIONSNames[i]):
+                o['OBSERVATIONS'][OBSERVATIONSNames[i]].append(float(v))  
             else:            
                 o['OBSERVATIONS'][OBSERVATIONSNames[i]].append(v)
+    print(o['LOCATION'])
     return o
 
 if __name__ == "__main__":

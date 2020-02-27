@@ -5,6 +5,14 @@ from lib.dobson_io import readWoudc
 import pytz
 import matplotlib
 matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+from datetime import datetime, timedelta
+from scipy.stats import pearsonr
+def hour_rounder(t):
+    # Rounds to nearest hour by adding a timedelta hour if minute >= 30
+    return (t.replace(second=0, microsecond=0, minute=0, hour=t.hour)
+               +timedelta(hours=t.minute//30))
+
 def go ( a ):
     """
     Main program for this thing.
@@ -28,24 +36,27 @@ def go ( a ):
     dOb['lat'] = []  
     dOb['date'] = []
     dOb['time'] = []
+    dOb['datetime'] = []
     dOb['O3'] = []   
     for s in dobsonFilesCsv:
         lonDobson, latDobson, datetimeDobson, ozoneDobson = readDobson(s, 'woudc')
+        dOb['lon'].extend(lonDobson)
+        dOb['lat'].extend(latDobson)
+        dOb['O3'].extend(ozoneDobson)    
+        dOb['datetime'].extend(datetimeDobson) 
+
         for t in datetimeDobson:
             dateDobson = t.astimezone(pytz.UTC).strftime('%Y%m%d')
-            timeDobson = t.astimezone(pytz.UTC).strftime('%H%M') 
+            timeDobson = t.astimezone(pytz.UTC).strftime('%H:%M') 
             # Do stuff for the experimental run (get idx for the experiment and the control along the way) 
             experimentAnalysisFiles.append( getFileName(a.ops, a.experiment, dateDobson, timeDobson) )
-
-            # now for the control
-            controlAnalysisFiles.append( getFileName(a.ops, a.control, dateDobson, timeDobson) )
-            dOb['lon'].extend(lonDobson)
-            dOb['lat'].extend(latDobson)
             dOb['date'].extend(dateDobson)
             dOb['time'].extend(timeDobson)
-            dOb['O3'].extend(ozoneDobson)    
+ 
+            # now for the control
+            controlAnalysisFiles.append( getFileName(a.ops, a.control, dateDobson, timeDobson) )
     uniqueE = []
-    uniqueC = {}
+    uniqueC = []
     for e in experimentAnalysisFiles:
         if e not in uniqueE:
             uniqueE.append(e)
@@ -65,10 +76,12 @@ def go ( a ):
     controlOzone = []
     experimentOzone = []
     #Actually do stuff.
-    for i,O3 in enumerate(dObs['O3']):
+
+    idxLon,idxLat =  getIndexFromAnalysis(experimentAnalysisFiles[0], dOb['lat'][0], dOb['lon'][0])
+    print(len(dOb['O3']),len(experimentAnalysisFiles))
+    for i,O3 in enumerate(dOb['O3']):
         
         # use sonde latitude to get x,y from analysis.
-        idxLon,idxLat =  getIndexFromAnalysis(experimentAnalysisFiles[i], s['lat'], s['lon'])
         print('Reading Experiment Analysis File: {}'.format(experimentAnalysisFiles[i]))
         h5 = h5py.File(experimentAnalysisFiles[i],'r')
         experimentOzone.append(np.asarray(h5['TO3'][0,idxLat,idxLon]))
@@ -83,10 +96,32 @@ def go ( a ):
         #ss = updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone )
     #ss = finishStats( ss )
     #writeH5(a, ss, press_int)
-    plt.plot(np.asarray(expermientOzone),'rx')
-    plt.plot(np.asarray(controlOzone),'ko')
-    plt.savefig('whir.png')
+    diffE = np.asarray(dOb['O3']) - np.asarray(experimentOzone)
+    diffC = np.asarray(dOb['O3']) - np.asarray(controlOzone)
 
+    print('std experiment, control',np.std(diffE), np.std(diffC)) 
+    print('rms experiment, control',np.sqrt(diffE**2).mean(), np.sqrt(diffC**2).mean()) 
+    plt.plot(np.asarray(dOb['datetime']),diffE,'rx')
+    plt.plot(np.asarray(dOb['datetime']),diffC,'bx')
+    plt.xticks(rotation=90)
+    #plt.plot(np.asarray(controlOzone),'ko')
+    plt.savefig('whir.png')
+    plt.close()
+    plt.plot(np.asarray(dOb['datetime']),np.asarray(experimentOzone),'rx')
+    plt.plot(np.asarray(dOb['datetime']),np.asarray(controlOzone),'bx')
+    plt.plot(np.asarray(dOb['datetime']),dOb['O3'],'kx')
+    plt.xticks(rotation=90)
+    plt.savefig('whir2.png')
+    plt.close()
+    xmin,xmax = min(dOb['O3']), max(dOb['O3'])
+    x= np.linspace(xmin,xmax,100)
+    plt.plot(dOb['O3'],np.asarray(experimentOzone),'rx')
+    plt.plot(dOb['O3'],np.asarray(controlOzone),'bx')
+    plt.plot(x,x,'k')
+    plt.savefig('whir3.png')
+    r1 = pearsonr(dOb['O3'], np.asarray(experimentOzone))
+    r2 = pearsonr(dOb['O3'], np.asarray(controlOzone))
+    print(r1,r2)
 def initProfileStats (nint):
     """
     Initialize dictionary with number of levels we want to interpolate against. (nint)
@@ -137,8 +172,17 @@ def readDobson ( s, dobsonType ):
         d = readWoudc(s)
         alon = float(d['LOCATION']['Longitude'])
         alat = float(d['LOCATION']['Latitude'])
-        time = d['OBSERVATIONS']['Time']
-        dobsonO3 = d['OBSERVATIONS']['ColumnO3']
+        idx = []
+        
+        i=0
+        for c in list(d['OBSERVATIONS']['StdDevO3'][:]):
+            if (float(c) < 0.7):
+                idx.append(i)
+            i+=1
+        idx = np.asarray(idx)
+        time = np.asarray(d['OBSERVATIONS']['Time'])[idx].tolist()
+        dobsonO3 = np.asarray(d['OBSERVATIONS']['ColumnO3'])[idx].tolist()
+        
         for dd in dobsonO3:
             lon.append(alon)
             lat.append(alat)
@@ -146,6 +190,30 @@ def readDobson ( s, dobsonType ):
         sys.exit("error don't know what dobson filetype this is!")
    
     return lon, lat, time, dobsonO3
+def timeLookupHour(dateString, timeString):
+    """
+    Lookup hourly. 
+
+    Input:
+            dateString: date of sonde YYYYMMDD
+            timeString: time of sonde hh:mm
+    Output:
+            YYYY: Year (integer) for analysis lookup
+            MM:   Month    "      "     "        "
+            DD:   Day      "      "     "        "
+            hh:   Hour     "      "     "        " 
+            mm:   Minute   "      "     "        "
+    
+    """
+    YYYY = int(dateString[0:4])
+    MM = int(dateString[4:6])
+    DD = int(dateString[6:8])
+    hh = int(timeString.split(':')[0])
+    mm = int(timeString.split(':')[1])
+    t = datetime(YYYY, MM, DD, hh,mm,0)
+    tt = hour_rounder(t)
+    return tt.year, tt.month, tt.day, tt.hour, tt.minute 
+
 
 def timeLookup(dateString, timeString):
     """
@@ -186,9 +254,9 @@ def getFileName(ops, experiment, dateSonde, timeSonde):
     Output:
             analysisFile: give the analysis file to read in
     """
-    YYYY, MM, DD, hh, mm =  timeLookup(dateSonde, timeSonde)
+    YYYY, MM, DD, hh, mm =  timeLookupHour(dateSonde, timeSonde)
     analysisFile = os.path.join(ops, experiment,'diag','Y{:04d}'.format(YYYY), 'M{:02d}'.format(MM),\
-                   experiment+'.inst3_3d_asm_Np.'+dateSonde+'_'+'{:02d}00z.nc4'.format(hh))
+                   experiment+'.inst1_2d_asm_Nx.'+dateSonde+'_'+'{:02d}00z.nc4'.format(hh))
     return analysisFile 
 
 def getIndexFromAnalysis(analysisFile, latSonde, lonSonde):
@@ -332,7 +400,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser( description = 'compare ozone sondes')
     parser.add_argument('--experiment', help = 'experiment', required = True, dest = 'experiment')
     parser.add_argument('--control',help = 'control', required = True, dest='control')
-    parser.add_argument('--ops', help = 'Optional arg to specify ops archive.', required = False, dest = 'ops',default="/archive/u/bkarpowi/")
+    parser.add_argument('--ops', help = 'Optional arg to specify ops archive.', required = False, dest = 'ops',default="/discover/nobackup/projects/gmao/obsdev/bkarpowi/")
     parser.add_argument('--cname', help="control name.", dest='cname', default='control' )
     parser.add_argument('--ename', help="experiment name.", dest='ename', default='experiment' )
     parser.add_argument('--dobson', help="path to dobson measurements.", dest='dobson_path', required=True)
