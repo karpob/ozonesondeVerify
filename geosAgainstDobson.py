@@ -122,35 +122,6 @@ def go ( a ):
     r1 = pearsonr(dOb['O3'], np.asarray(experimentOzone))
     r2 = pearsonr(dOb['O3'], np.asarray(controlOzone))
     print(r1,r2)
-def initProfileStats (nint):
-    """
-    Initialize dictionary with number of levels we want to interpolate against. (nint)
-    Input:
-            nint: Number of pressure levels in the grid
-    Output:
-            o: dictionary of stats
-            o['count_sonde'] :        counts (# of sondes used at each interpolated profile gridpoint)
-            o['count_both'] :         counts where there are valid analysis profile, and sonde profile points
-            o['av_sonde'] :           average of sonde ozone (using count_both)
-            o['av_sonde_standalone']: average of sonde ozone (using count_sonde)
-            o['av_ana1']:             average of control analysis profile ozone
-            o['av_ana2']:             average of experiment analysis profile ozone
-            o['std_ana1']:            rms between control analysis and sondes
-            o['std_ana2']:            rms between experiment analysis and sondes 
-            o['std_sonde']:           std of the sondes
-           
-    """
-    o = {} 
-    o['count_sonde'] = np.zeros(nint)
-    o['count_both'] = np.zeros(nint)
-    o['av_sonde'] = np.zeros(nint)
-    o['av_sonde_standalone'] = np.zeros(nint)
-    o['av_ana1']  = np.zeros(nint)
-    o['av_ana2']  = np.zeros(nint)
-    o['std_ana1']   = np.zeros(nint)
-    o['std_ana2']   = np.zeros(nint)
-    o['std_sonde'] = np.zeros(nint)
-    return o
 
 def readDobson ( s, dobsonType ):
     """
@@ -214,35 +185,6 @@ def timeLookupHour(dateString, timeString):
     tt = hour_rounder(t)
     return tt.year, tt.month, tt.day, tt.hour, tt.minute 
 
-
-def timeLookup(dateString, timeString):
-    """
-    Not 100% sure how this guy works, but looks up nearest analysis time for a given sonde.
-
-    Input:
-            dateString: date of sonde YYYYMMDD
-            timeString: time of sonde hh:mm
-    Output:
-            YYYY: Year (integer) for analysis lookup
-            MM:   Month    "      "     "        "
-            DD:   Day      "      "     "        "
-            hh:   Hour     "      "     "        " 
-            mm:   Minute   "      "     "        "
-    
-    """
-    YYYY = int(dateString[0:4])
-    MM = int(dateString[4:6])
-    DD = int(dateString[6:8])
-    hh = int(timeString.split(':')[0])
-    mm = int(timeString.split(':')[1])
-    # following Kris' script to look up analysis time.
-    timefrac = (hh + mm/60)/24.0
-    ihh = math.floor(timefrac*8.0+ 0.5)
-    if(ihh > 7): ihh = 7
-    hh = '{:02d}'.format(ihh*3)
-    hh = int(hh)
-    return YYYY, MM, DD, hh, mm 
-
 def getFileName(ops, experiment, dateSonde, timeSonde):
     """   
     Get the sonde ilename given path to users experiments, experiment, datestring, timetring
@@ -290,111 +232,6 @@ def getIndexFromAnalysis(analysisFile, latSonde, lonSonde):
     h5.close()
     return idxLon, idxLat
 
-
-def updateStats(ss, interpolatedSondeOzone, controlOzone, experimentOzone ):
-    """
-    Compute and update stats for a given profile. 
-    These are really running tallies. 
-    They aren't the actual statistics until finishStats() has been run.
-
-    Input:
-            ss: stats dictionary
-            ss['count_sonde'] :        counts (# of sondes used at each interpolated profile gridpoint)
-            ss['count_both'] :         counts where there are valid analysis profile, and sonde profile points
-            ss['av_sonde'] :           average of sonde ozone (using count_both)
-            ss['av_sonde_standalone']: average of sonde ozone (using count_sonde)
-            ss['av_ana1']:             average of control analysis profile ozone
-            ss['av_ana2']:             average of experiment analysis profile ozone
-            ss['std_ana1']:            rms between control analysis and sondes
-            ss['std_ana2']:            rms between experiment analysis and sondes 
-            ss['std_sonde']:           std of the sondes
-            interpolatedSondeOzone: ozone sonde profile interpolated to grid (mPa)
-            controlOzone: ozone profile from control analysis interpolated to grid (mPa)
-            experimentOzone: ozone profile from experiment analysis interpolated to grid (mPa)
-    Output:
-            ss: stats dictionary
- 
-    """
-
-    # The introduction of potentially bad portions of analysis profile leads to having to break out index
-    # into sondes for sonde and "both" for rms error stats.
-    
-    # using nans may not be the greatest idea, as these lines will give you a warning, but will work.
-    idxGoodSonde, = np.where( np.isfinite(interpolatedSondeOzone) & (interpolatedSondeOzone > 0.0) )
-    idxGoodBoth, = np.where ( np.isfinite(interpolatedSondeOzone) & (interpolatedSondeOzone > 0.0) &\
-                        np.isfinite(controlOzone) & np.isfinite(experimentOzone) & (controlOzone > 0.0) & (experimentOzone > 0.0) ) 
-        
-    ss['count_sonde'][idxGoodSonde] = ss['count_sonde'][idxGoodSonde] + 1.0 
-    ss['count_both'][idxGoodBoth] = ss['count_both'][idxGoodBoth] + 1.0
-
-    ss['av_sonde'][idxGoodBoth] = ss['av_sonde'][idxGoodBoth] + interpolatedSondeOzone[idxGoodBoth]
-    ss['av_sonde_standalone'][idxGoodSonde] = ss['av_sonde_standalone'][idxGoodSonde] + interpolatedSondeOzone[idxGoodSonde]
-    ss['av_ana1'][idxGoodBoth] = ss['av_ana1'][idxGoodBoth] + controlOzone[idxGoodBoth]
-    ss['av_ana2'][idxGoodBoth] = ss['av_ana2'][idxGoodBoth] + experimentOzone[idxGoodBoth]
-
-    #here std is really rms error. and we need Both
-    ss['std_ana1'][idxGoodBoth] =  ss['std_ana1'][idxGoodBoth] + (controlOzone[idxGoodBoth] -interpolatedSondeOzone[idxGoodBoth])**2
-    ss['std_ana2'][idxGoodBoth] =  ss['std_ana2'][idxGoodBoth] + (experimentOzone[idxGoodBoth] -interpolatedSondeOzone[idxGoodBoth])**2
-    # here std is std
-    ss['std_sonde'][idxGoodSonde] =  ss['std_sonde'][idxGoodSonde] + (interpolatedSondeOzone[idxGoodSonde])**2
-    return ss
-
-def finishStats( ss ):
-    """
-    Take running tally values from stats dictionary and convert to desired statistics.
-    Input:
-            ss: stats dictionary
-            ss['count_sonde'] :        counts (# of sondes used at each interpolated profile gridpoint)
-            ss['count_both'] :         counts where there are valid analysis profile, and sonde profile points
-            ss['av_sonde'] :           average of sonde ozone (using count_both)
-            ss['av_sonde_standalone']: average of sonde ozone (using count_sonde)
-            ss['av_ana1']:             average of control analysis profile ozone
-            ss['av_ana2']:             average of experiment analysis profile ozone
-            ss['std_ana1']:            rms between control analysis and sondes
-            ss['std_ana2']:            rms between experiment analysis and sondes 
-            ss['std_sonde']:           std of the sondes
-            interpolatedSondeOzone: ozone sonde profile interpolated to grid (mPa)
-            controlOzone: ozone profile from control analysis interpolated to grid (mPa)
-            experimentOzone: ozone profile from experiment analysis interpolated to grid (mPa)
-    Output:
-            ss: stats dictionary
- 
-    """
-    diff1 = np.zeros(ss['count_sonde'].shape[0])
-    diff2 = np.zeros(ss['count_sonde'].shape[0])
-    idxGoodSonde, = np.where( ss['count_sonde']>1 )
-    idxGoodBoth, = np.where( ss['count_both'] > 1 )
-
-    ss['av_ana1'][idxGoodBoth] = ss['av_ana1'][idxGoodBoth]/ss['count_both'][idxGoodBoth]
-    ss['av_ana2'][idxGoodBoth] = ss['av_ana2'][idxGoodBoth]/ss['count_both'][idxGoodBoth]
-    ss['av_sonde'][idxGoodBoth] = ss['av_sonde'][idxGoodBoth]/ss['count_both'][idxGoodBoth]
-
-    ss['av_sonde_standalone'][idxGoodBoth] = ss['av_sonde_standalone'][idxGoodBoth]/ss['count_sonde'][idxGoodBoth]
-
-    diff1[idxGoodBoth] = ss['av_ana1'][idxGoodBoth] - ss['av_sonde'][idxGoodBoth]
-    diff2[idxGoodBoth] = ss['av_ana2'][idxGoodBoth] - ss['av_sonde'][idxGoodBoth]
-
-    ss['std_ana1'][idxGoodBoth] =  ss['std_ana1'][idxGoodBoth] - ss['count_both'][idxGoodBoth]*(diff1[idxGoodBoth])**2
-    ss['std_ana1'][idxGoodBoth] =  np.sqrt(ss['std_ana1'][idxGoodBoth]/(ss['count_both'][idxGoodBoth]-1) ) 
-
-    ss['std_ana2'][idxGoodBoth] =  ss['std_ana2'][idxGoodBoth] - ss['count_both'][idxGoodBoth]*(diff2[idxGoodBoth])**2
-    ss['std_ana2'][idxGoodBoth] =  np.sqrt(ss['std_ana2'][idxGoodBoth]/(ss['count_both'][idxGoodBoth]-1) ) 
-    ss['std_sonde'][idxGoodSonde] = ss['std_sonde'][idxGoodSonde] - ss['count_sonde'][idxGoodSonde]*(ss['av_sonde_standalone'][idxGoodSonde])**2
-    ss['std_sonde'][idxGoodSonde] = np.sqrt( ss['std_sonde'][idxGoodSonde] / (ss['count_sonde'][idxGoodSonde]-1) )
-    return ss
-def writeH5( a, ss, press_int ):
-    """
-    Write hdf5 tagged with input experiment and control.
-    Input:
-            a: command line argparse
-            ss: stats dictionary
-    Output: 
-            hdf5 file: {experiment}_{control}_output_stats.h5 output to wherever the script is running. (cwd)
-    """
-    with h5py.File(a.experiment +'_'+ a.control +'_output_stats.h5','w') as f:
-        for k in list(ss.keys()):
-            dset = f.create_dataset(k,data=ss[k])
-        dset = f.create_dataset('pressure', data = press_int )
  
 if __name__ == "__main__":
     parser = argparse.ArgumentParser( description = 'compare ozone sondes')
